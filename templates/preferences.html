@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Preferences – {{ client.name }}{% endblock %}
+
+{% block sidebar %}
+<a href="/client/{{ token }}"><span class="ico">🏠</span> Dashboard</a>
+<a href="/client/{{ token }}/strategy"><span class="ico">🗓️</span> Strategy</a>
+<a href="/client/{{ token }}/upload"><span class="ico">⬆️</span> Upload</a>
+<a href="/client/{{ token }}/preferences" class="active"><span class="ico">⚙️</span> Preferences</a>
+{% endblock %}
+
+{% block content %}
+<h1>Preferences</h1>
+<p class="subtitle">These settings are applied automatically to every post you upload.</p>
+
+<form method="POST" action="/client/{{ token }}/preferences">
+
+  <!-- Image editing -->
+  <div class="card">
+    <div class="card-title">🖼️ Photo Editing</div>
+
+    <div class="form-group">
+      <label>Brightness</label>
+      <div class="range-row">
+        <input type="range" name="image_brightness" min="0.5" max="1.5" step="0.05"
+               value="{{ client.image_brightness }}" oninput="this.nextElementSibling.textContent=this.value"/>
+        <span class="range-val">{{ client.image_brightness }}</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Contrast</label>
+      <div class="range-row">
+        <input type="range" name="image_contrast" min="0.5" max="1.5" step="0.05"
+               value="{{ client.image_contrast }}" oninput="this.nextElementSibling.textContent=this.value"/>
+        <span class="range-val">{{ client.image_contrast }}</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Saturation / Colour Intensity</label>
+      <div class="range-row">
+        <input type="range" name="image_saturation" min="0.5" max="1.5" step="0.05"
+               value="{{ client.image_saturation }}" oninput="this.nextElementSibling.textContent=this.value"/>
+        <span class="range-val">{{ client.image_saturation }}</span>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="form-group">
+        <label>Colour Temperature</label>
+        <select name="image_warmth">
+          <option value="neutral" {% if client.image_warmth=='neutral' %}selected{% endif %}>Neutral (keep original)</option>
+          <option value="warm"    {% if client.image_warmth=='warm'    %}selected{% endif %}>Warm (golden tones)</option>
+          <option value="cool"    {% if client.image_warmth=='cool'    %}selected{% endif %}>Cool (blue tones)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Style Filter</label>
+        <select name="image_filter">
+          <option value="none"  {% if client.image_filter=='none'  %}selected{% endif %}>None (no filter)</option>
+          <option value="vivid" {% if client.image_filter=='vivid' %}selected{% endif %}>Vivid (punchy colours)</option>
+          <option value="matte" {% if client.image_filter=='matte' %}selected{% endif %}>Matte (faded, film-like)</option>
+          <option value="mono"  {% if client.image_filter=='mono'  %}selected{% endif %}>Mono (black &amp; white)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Crop Ratio</label>
+        <select name="image_crop">
+          <option value="4:5"      {% if client.image_crop=='4:5'      %}selected{% endif %}>4:5 Portrait (recommended for feed)</option>
+          <option value="1:1"      {% if client.image_crop=='1:1'      %}selected{% endif %}>1:1 Square</option>
+          <option value="original" {% if client.image_crop=='original' %}selected{% endif %}>Original (no crop)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video / Reels -->
+  <div class="card">
+    <div class="card-title">🎬 Reels Settings</div>
+
+    <div class="form-group">
+      <label>Max Reel Duration (seconds, max 90)</label>
+      <input type="number" name="reel_max_duration" min="5" max="90"
+             value="{{ client.reel_max_duration }}"/>
+    </div>
+
+    <div class="form-group">
+      <label>If video is longer than max duration…</label>
+      <select name="reel_trim_strategy">
+        <option value="trim" {% if client.reel_trim_strategy=='trim' %}selected{% endif %}>Auto-trim to max duration</option>
+        <option value="flag" {% if client.reel_trim_strategy=='flag' %}selected{% endif %}>Flag for manual trimming</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Caption -->
+  <div class="card">
+    <div class="card-title">✍️ Caption Style</div>
+
+    <div class="grid2">
+      <div class="form-group">
+        <label>Tone</label>
+        <select name="caption_tone">
+          <option value="casual"        {% if client.caption_tone=='casual'        %}selected{% endif %}>Casual &amp; Friendly</option>
+          <option value="professional"  {% if client.caption_tone=='professional'  %}selected{% endif %}>Professional</option>
+          <option value="fun"           {% if client.caption_tone=='fun'           %}selected{% endif %}>Fun &amp; Playful</option>
+          <option value="inspirational" {% if client.caption_tone=='inspirational' %}selected{% endif %}>Inspirational</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Caption Length</label>
+        <select name="caption_length">
+          <option value="short"  {% if client.caption_length=='short'  %}selected{% endif %}>Short (under 50 words)</option>
+          <option value="medium" {% if client.caption_length=='medium' %}selected{% endif %}>Medium (60–120 words)</option>
+          <option value="long"   {% if client.caption_length=='long'   %}selected{% endif %}>Long – story format (130–220 words)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Include Hashtags</div>
+        <div class="toggle-desc">Auto-add 5–10 relevant hashtags</div>
+      </div>
+      <input type="checkbox" name="caption_hashtags" {% if client.caption_hashtags %}checked{% endif %}/>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Include Emojis</div>
+        <div class="toggle-desc">Sprinkle relevant emojis throughout the caption</div>
+      </div>
+      <input type="checkbox" name="caption_emoji" {% if client.caption_emoji %}checked{% endif %}/>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;padding:14px">
+    💾 Save Preferences
+  </button>
+
+</form>
+{% endblock %}

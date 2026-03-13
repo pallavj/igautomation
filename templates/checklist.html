@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Content Plan – {{ client.name }}{% endblock %}
+
+{% block sidebar %}
+<a href="/client/{{ token }}"><span class="ico">🏠</span> Dashboard</a>
+<a href="/client/{{ token }}/strategy" class="active"><span class="ico">🗓️</span> Strategy</a>
+<a href="/client/{{ token }}/upload"><span class="ico">⬆️</span> Upload</a>
+<a href="/client/{{ token }}/preferences"><span class="ico">⚙️</span> Preferences</a>
+{% endblock %}
+
+{% block content %}
+<h1>This Week's Content Plan</h1>
+<p class="subtitle">3 posts ready to create — click any card to start making it.</p>
+
+<!-- Strategy summary -->
+<div class="card" style="padding:16px 20px;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">WEEK OF</div>
+      <div style="font-size:14px;font-weight:600">{{ strategy.week_of }}</div>
+    </div>
+    <div style="flex:1;min-width:200px;padding:0 20px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">OBJECTIVES</div>
+      <div style="font-size:13px;color:var(--text)">
+        {{ strategy.objectives[:120] }}{% if strategy.objectives|length > 120 %}…{% endif %}
+      </div>
+    </div>
+    <div>
+      <a href="/client/{{ token }}/strategy/{{ strategy.id }}/review"
+         class="btn btn-ghost btn-sm">View Strategy</a>
+    </div>
+  </div>
+</div>
+
+<!-- Post cards -->
+<div style="display:flex;flex-direction:column;gap:16px">
+  {% for item in items %}
+  <div class="checklist-card {% if item.status == 'done' %}card-done{% elif item.status == 'in_progress' %}card-inprogress{% else %}card-pending{% endif %}"
+       style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+
+    <!-- Card header -->
+    <div style="display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border)">
+      <!-- Day pill -->
+      <div class="day-pill" style="
+        padding:16px 20px;
+        min-width:110px;
+        text-align:center;
+        {% if item.status == 'done' %}background:#f0fdf4;{% elif item.status == 'in_progress' %}background:#f5f3ff;{% else %}background:var(--surface2);{% endif %}
+      ">
+        <div style="font-size:11px;color:var(--muted);font-weight:500;letter-spacing:0.5px;text-transform:uppercase">
+          {{ item.day[:3].upper() }}
+        </div>
+        <div style="font-size:22px;margin-top:2px">
+          {% if item.status == 'done' %}✅
+          {% elif item.status == 'in_progress' %}⏳
+          {% elif item.suggested_type == 'video' %}🎬
+          {% elif item.suggested_type == 'generated' %}🤖
+          {% else %}🖼️{% endif %}
+        </div>
+        <div style="font-size:11px;margin-top:4px;font-weight:600;
+          {% if item.status == 'done' %}color:var(--green)
+          {% elif item.status == 'in_progress' %}color:var(--accent2)
+          {% else %}color:var(--muted){% endif %}">
+          {% if item.status == 'done' %}Done
+          {% elif item.status == 'in_progress' %}In Progress
+          {% else %}
+            {{ item.suggested_type|capitalize }}
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Title and description -->
+      <div style="flex:1;padding:16px 20px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:6px;
+          {% if item.status == 'done' %}color:var(--muted);{% endif %}">
+          {{ item.title }}
+        </div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6">
+          {{ item.description }}
+        </div>
+      </div>
+
+      <!-- Action button -->
+      <div style="padding:16px 20px;flex-shrink:0">
+        {% if item.status == 'done' %}
+          <span class="badge badge-posted">✓ Created</span>
+        {% elif item.status == 'in_progress' %}
+          <span class="badge badge-processing">⏳ In Progress</span>
+        {% else %}
+          {% if item.suggested_type == 'generated' %}
+            <a href="/client/{{ token }}/upload?plan_item_id={{ item.id }}&brief={{ item.brief | urlencode }}&type=generated"
+               class="btn btn-primary btn-sm">🤖 Generate Image</a>
+          {% elif item.suggested_type == 'video' %}
+            <a href="/client/{{ token }}/upload?plan_item_id={{ item.id }}&brief={{ item.brief | urlencode }}&type=video"
+               class="btn btn-primary btn-sm">🎬 Upload Video</a>
+          {% else %}
+            <a href="/client/{{ token }}/upload?plan_item_id={{ item.id }}&brief={{ item.brief | urlencode }}&type=image"
+               class="btn btn-primary btn-sm">📸 Create Post</a>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Brief preview (collapsed by default) -->
+    <div style="padding:12px 20px;background:var(--surface2)">
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer"
+           onclick="toggleBrief(this)">
+        <span style="font-size:12px;color:var(--muted);font-weight:500">📝 BRIEF PREVIEW</span>
+        <span style="font-size:11px;color:var(--muted)" class="brief-toggle-icon">▸ show</span>
+      </div>
+      <div class="brief-text" style="display:none;font-size:13px;color:var(--muted);line-height:1.7;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        {{ item.brief }}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Bottom actions -->
+<div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap">
+  <a href="/client/{{ token }}/strategy" class="btn btn-ghost">
+    ＋ New Strategy
+  </a>
+  <a href="/client/{{ token }}" class="btn btn-ghost">
+    🏠 Dashboard
+  </a>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleBrief(el) {
+  const card = el.closest('[style*="surface2"]');
+  const brief = card.querySelector('.brief-text');
+  const icon = card.querySelector('.brief-toggle-icon');
+  const isHidden = brief.style.display === 'none';
+  brief.style.display = isHidden ? 'block' : 'none';
+  icon.textContent = isHidden ? '▾ hide' : '▸ show';
+}
+</script>
+{% endblock %}

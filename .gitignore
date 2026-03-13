@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+.env.local
+
+# Database (local dev only — Render uses /data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads / processed media (stored on Render disk, not in repo)
+static/uploads/
+static/processed/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

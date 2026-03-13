@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: instaflow
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app --workers 2 --timeout 120"
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: BASE_URL
+        sync: false          # Set this to your Render URL after first deploy
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        value: sqlite:////data/automation.db
+      - key: UPLOAD_FOLDER
+        value: /data/uploads
+      - key: PROCESSED_FOLDER
+        value: /data/processed
+
+    # Persistent disk — keeps uploads, processed files, and DB across deploys
+    # $0.25/GB/month on Render (1 GB is plenty for 5 clients)
+    disk:
+      name: instaflow-data
+      mountPath: /data
+      sizeGB: 1

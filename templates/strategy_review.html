@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Review Strategy – {{ client.name }}{% endblock %}
+
+{% block sidebar %}
+<a href="/client/{{ token }}"><span class="ico">🏠</span> Dashboard</a>
+<a href="/client/{{ token }}/strategy" class="active"><span class="ico">🗓️</span> Strategy</a>
+<a href="/client/{{ token }}/upload"><span class="ico">⬆️</span> Upload</a>
+<a href="/client/{{ token }}/preferences"><span class="ico">⚙️</span> Preferences</a>
+{% endblock %}
+
+{% block content %}
+<h1>Review Your Strategy</h1>
+<p class="subtitle">Read through the strategy, edit if needed, then confirm to generate your 3-post content plan.</p>
+
+<!-- Objectives recap -->
+<div class="card" style="border-color: var(--border)">
+  <div class="card-title" style="margin-bottom:8px">📋 Your Objectives</div>
+  <p style="font-size:14px;color:var(--muted);white-space:pre-line">{{ strategy.objectives }}</p>
+</div>
+
+<!-- Strategy content -->
+<div class="card" id="strategyCard">
+  <div class="card-title">✨ AI-Generated Strategy</div>
+
+  {% if strategy.status == 'generating' %}
+  <!-- Loading state -->
+  <div id="loadingState" style="text-align:center;padding:40px 0">
+    <div style="font-size:40px;margin-bottom:16px;animation:pulse 1.5s infinite">🧠</div>
+    <p style="color:var(--muted);font-size:14px">Crafting your weekly strategy…</p>
+    <p style="color:var(--muted);font-size:13px;margin-top:8px">This takes about 10 seconds.</p>
+  </div>
+  <div id="strategyContent" style="display:none">
+    <!-- Populated by JS once ready -->
+  </div>
+
+  {% else %}
+  <!-- Strategy ready -->
+  <div id="loadingState" style="display:none"></div>
+  <div id="strategyContent">
+    <div id="strategyDisplay" style="white-space:pre-line;font-size:14px;line-height:1.8;color:var(--text);margin-bottom:20px">{{ strategy.strategy_text }}</div>
+
+    <!-- Edit form -->
+    <div id="editFormWrap" style="display:none">
+      <form method="POST" action="/client/{{ token }}/strategy/{{ strategy.id }}/save" id="editForm">
+        <div class="form-group">
+          <textarea name="strategy_text" rows="10" id="editTextarea">{{ strategy.strategy_text }}</textarea>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+          <button type="button" class="btn btn-ghost" onclick="toggleEdit()">Cancel</button>
+        </div>
+      </form>
+    </div>
+
+    {% if strategy.status != 'confirmed' %}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" onclick="toggleEdit()">✏️ Edit Strategy</button>
+      <form method="POST" action="/client/{{ token }}/strategy/{{ strategy.id }}/confirm" style="margin:0">
+        <button type="submit" class="btn btn-primary" id="confirmBtn">
+          ✅ Confirm & Build Content Plan
+        </button>
+      </form>
+    </div>
+    {% else %}
+    <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+      <a href="/client/{{ token }}/strategy/{{ strategy.id }}/checklist"
+         class="btn btn-green">📋 View Content Plan →</a>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<style>
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleEdit() {
+  const display = document.getElementById('strategyDisplay');
+  const editWrap = document.getElementById('editFormWrap');
+  const isEditing = editWrap.style.display !== 'none';
+  display.style.display = isEditing ? 'block' : 'none';
+  editWrap.style.display = isEditing ? 'none' : 'block';
+}
+
+{% if strategy.status == 'generating' %}
+// Poll until strategy is ready
+const token = '{{ token }}';
+const strategyId = {{ strategy.id }};
+
+async function pollStrategy() {
+  try {
+    const resp = await fetch(`/client/${token}/strategy/${strategyId}/status`);
+    const data = await resp.json();
+
+    if (data.status !== 'generating') {
+      // Show the strategy text
+      document.getElementById('loadingState').style.display = 'none';
+      const content = document.getElementById('strategyContent');
+      content.innerHTML = `
+        <div style="white-space:pre-line;font-size:14px;line-height:1.8;color:var(--text);margin-bottom:20px">${escapeHtml(data.strategy_text)}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+          <a href="/client/${token}/strategy/${strategyId}/review" class="btn btn-ghost">✏️ Edit Strategy</a>
+          <form method="POST" action="/client/${token}/strategy/${strategyId}/confirm" style="margin:0">
+            <button type="submit" class="btn btn-primary">✅ Confirm & Build Content Plan</button>
+          </form>
+        </div>
+      `;
+      content.style.display = 'block';
+      return;
+    }
+  } catch(e) {}
+  setTimeout(pollStrategy, 3000);
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+pollStrategy();
+{% endif %}
+
+// Prevent double-submit on confirm
+const confirmBtn = document.getElementById('confirmBtn');
+if (confirmBtn) {
+  confirmBtn.closest('form').addEventListener('submit', function() {
+    confirmBtn.textContent = '⏳ Generating your 3-post plan…';
+    confirmBtn.disabled = true;
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}InstaFlow{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Light content area */
+      --bg: #f4f4f8;
+      --surface: #ffffff;
+      --surface2: #f0f0f8;
+      --surface3: #e8e8f2;
+      --border: #e2e2ee;
+      --border-light: #d4d4e8;
+
+      /* Accent */
+      --accent: #7c3aed;
+      --accent-hover: #6d28d9;
+      --accent2: #6d28d9;
+      --accent-glow: rgba(124, 58, 237, 0.1);
+
+      /* Semantic colours */
+      --green: #16a34a;
+      --green-dim: #15803d;
+      --red: #dc2626;
+      --yellow: #d97706;
+      --blue: #2563eb;
+
+      /* Text */
+      --text: #1a1a2e;
+      --text-secondary: #4b4b6e;
+      --muted: #8888aa;
+
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); }
+
+    /* ── Layout ──────────────────────────────────── */
+    .layout { display: flex; min-height: 100vh; }
+
+    /* Sidebar stays dark — its own colour palette */
+    .sidebar {
+      width: 230px; min-width: 230px;
+      background: #16161e;
+      border-right: 1px solid #2a2a3a;
+      padding: 28px 16px;
+      display: flex; flex-direction: column; gap: 4px;
+      position: sticky; top: 0; height: 100vh;
+    }
+
+    .sidebar-logo {
+      font-size: 17px; font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 28px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px;
+    }
+    .sidebar-logo .logo-icon {
+      width: 34px; height: 34px;
+      background: var(--accent);
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    .sidebar a {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
+      border-radius: 9px;
+      color: #9090b0;
+      font-size: 14px; font-weight: 500;
+      transition: all 0.15s;
+    }
+    .sidebar a:hover {
+      background: #22222f;
+      color: #e0e0f0;
+    }
+    .sidebar a.active {
+      background: rgba(124, 58, 237, 0.18);
+      color: #c4b5fd;
+      border: 1px solid rgba(124, 58, 237, 0.3);
+    }
+    .sidebar a .ico { font-size: 16px; flex-shrink: 0; }
+
+    .main {
+      flex: 1;
+      padding: 40px 48px;
+      max-width: 940px;
+      min-width: 0;
+    }
+
+    /* ── Cards ──────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .card:hover { border-color: var(--border-light); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+    .card-title {
+      font-size: 15px; font-weight: 700;
+      color: var(--text);
+      margin-bottom: 18px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    /* ── Buttons ──────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 10px 20px; border-radius: 9px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      border: none; transition: all 0.15s;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+    }
+    .btn-primary:hover { background: var(--accent-hover); color: #fff; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4); transform: translateY(-1px); }
+    .btn-green { background: var(--green); color: #fff; box-shadow: 0 2px 6px rgba(22,163,74,0.25); }
+    .btn-green:hover { background: var(--green-dim); color: #fff; transform: translateY(-1px); }
+    .btn-red { background: var(--red); color: #fff; }
+    .btn-red:hover { background: #b91c1c; color: #fff; }
+    .btn-ghost {
+      background: transparent;
+      border: 1.5px solid var(--border-light);
+      color: var(--text-secondary);
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+    .btn-sm { padding: 7px 14px; font-size: 13px; }
+    .btn-lg { padding: 14px 28px; font-size: 15px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+    /* ── Form controls ──────────────────────────────────── */
+    label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    input[type=text], input[type=email], input[type=number],
+    select, textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      color: var(--text);
+      padding: 11px 14px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    input::placeholder, textarea::placeholder { color: var(--muted); }
+    textarea { resize: vertical; min-height: 100px; }
+    select { background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 10px center; background-size: 18px; appearance: none; }
+
+    .form-group { margin-bottom: 18px; }
+
+    /* Range slider */
+    input[type=range] {
+      width: 100%; accent-color: var(--accent);
+      background: transparent; border: none; padding: 0; box-shadow: none;
+    }
+    .range-row { display: flex; align-items: center; gap: 12px; }
+    .range-val {
+      font-size: 13px; color: var(--accent);
+      min-width: 36px; text-align: right; font-weight: 700;
+      background: var(--accent-glow); padding: 2px 8px; border-radius: 6px;
+    }
+
+    /* ── Badges ──────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 12px; border-radius: 99px;
+      font-size: 12px; font-weight: 600;
+    }
+    .badge-pending    { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .badge-review     { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+    .badge-posted     { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .badge-failed     { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .badge-processing { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+
+    /* ── Flash messages ──────────────────────────────────── */
+    .flashes { margin-bottom: 24px; }
+    .flash {
+      padding: 13px 18px; border-radius: 9px;
+      font-size: 14px; margin-bottom: 8px;
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 500;
+    }
+    .flash-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .flash-error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .flash-warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+    .flash-info    { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+
+    /* ── Tables ──────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th {
+      text-align: left; color: var(--muted); font-weight: 600; font-size: 11px;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      padding: 10px 16px; border-bottom: 1.5px solid var(--border);
+      background: var(--surface2);
+    }
+    td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #fafafa; }
+
+    /* ── Dropzone ──────────────────────────────────── */
+    .dropzone {
+      border: 2px dashed var(--border-light);
+      border-radius: var(--radius);
+      padding: 52px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--surface2);
+    }
+    .dropzone:hover, .dropzone.active {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+    .dropzone .icon { font-size: 42px; margin-bottom: 14px; }
+    .dropzone p { color: var(--text-secondary); font-size: 14px; }
+    .dropzone strong { color: var(--text); }
+
+    /* ── Media preview ──────────────────────────────────── */
+    .media-preview img, .media-preview video {
+      max-width: 100%; border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    /* ── Toggle ──────────────────────────────────── */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 0; border-bottom: 1px solid var(--border);
+    }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-label { font-size: 14px; color: var(--text); font-weight: 500; }
+    .toggle-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    input[type=checkbox] {
+      width: 42px; height: 24px;
+      appearance: none; background: var(--border-light);
+      border-radius: 99px; position: relative; cursor: pointer;
+      transition: background 0.2s; flex-shrink: 0; border: none; box-shadow: none;
+    }
+    input[type=checkbox]:checked { background: var(--accent); }
+    input[type=checkbox]::after {
+      content: ""; position: absolute;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; top: 3px; left: 3px;
+      transition: left 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    input[type=checkbox]:checked::after { left: 21px; }
+
+    /* ── Typography ──────────────────────────────────── */
+    h1 { font-size: 24px; font-weight: 800; margin-bottom: 6px; color: var(--text); letter-spacing: -0.3px; }
+    h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+    .subtitle { color: var(--text-secondary); font-size: 14px; margin-bottom: 32px; }
+
+    /* ── Grid ──────────────────────────────────── */
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+    /* ── Stat cards ──────────────────────────────────── */
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .stat-num { font-size: 36px; font-weight: 800; line-height: 1; margin-bottom: 6px; }
+    .stat-label { font-size: 13px; color: var(--text-secondary); }
+
+    /* ── Callouts ──────────────────────────────────── */
+    .callout {
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      line-height: 1.6;
+    }
+    .callout-purple {
+      background: #f5f3ff;
+      border: 1px solid #ddd6fe;
+      color: #5b21b6;
+    }
+    .callout-purple strong { color: #4c1d95; }
+    .callout-green {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+    .callout-yellow {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+    }
+    .callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
+    /* ── Flow diagram ──────────────────────────────────── */
+    .flow {
+      display: flex; align-items: flex-start; gap: 0;
+      margin-bottom: 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .flow-step {
+      flex: 1; padding: 20px 16px; text-align: center;
+      border-right: 1px solid var(--border);
+      position: relative;
+    }
+    .flow-step:last-child { border-right: none; }
+    .flow-step-num {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--surface2); color: var(--muted);
+      font-size: 12px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 10px;
+    }
+    .flow-step.active .flow-step-num { background: var(--accent); color: #fff; }
+    .flow-step-icon { font-size: 24px; margin-bottom: 8px; }
+    .flow-step-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .flow-step-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+    .flow-arrow {
+      display: flex; align-items: center;
+      color: var(--border-light); font-size: 18px;
+      margin-top: 28px; flex-shrink: 0;
+    }
+
+    /* ── Responsive ──────────────────────────────────── */
+    @media (max-width: 768px) {
+      .layout { flex-direction: column; }
+      .sidebar {
+        width: 100%; height: auto; position: static;
+        flex-direction: row; flex-wrap: wrap;
+        padding: 12px 10px; gap: 4px;
+      }
+      .sidebar-logo { margin-bottom: 8px; width: 100%; }
+      .sidebar a { padding: 8px 10px; font-size: 13px; }
+      .main { padding: 20px 16px; }
+      .grid2, .grid3 { grid-template-columns: 1fr; }
+      .flow { flex-direction: column; }
+      .flow-step { border-right: none; border-bottom: 1px solid var(--border); }
+      .flow-step:last-child { border-bottom: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">📸</div>
+      InstaFlow
+    </div>
+    {% block sidebar %}{% endblock %}
+  </nav>
+  <main class="main">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flashes">
+          {% for cat, msg in messages %}
+            <div class="flash flash-{{ cat }}">
+              {% if cat == 'success' %}✓{% elif cat == 'error' %}✕{% elif cat == 'warning' %}⚠{% else %}ℹ{% endif %}
+              {{ msg }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – {{ client.name }}{% endblock %}
+
+{% block sidebar %}
+<a href="/client/{{ token }}" class="active"><span class="ico">🏠</span> Dashboard</a>
+<a href="/client/{{ token }}/strategy"><span class="ico">🗓️</span> Weekly Strategy</a>
+<a href="/client/{{ token }}/upload"><span class="ico">⬆️</span> Create Post</a>
+<a href="/client/{{ token }}/preferences"><span class="ico">⚙️</span> My Preferences</a>
+{% endblock %}
+
+{% block content %}
+<h1>Welcome back, {{ client.name.split(' ')[0] }} 👋</h1>
+<p class="subtitle">Your content hub — create posts, track progress, and download ready-to-post content.</p>
+
+<!-- How it works flow diagram -->
+<div class="flow" style="margin-bottom:28px">
+  <div class="flow-step">
+    <div class="flow-step-num">1</div>
+    <div class="flow-step-icon">🎯</div>
+    <div class="flow-step-title">Set Your Strategy</div>
+    <div class="flow-step-desc">Tell us your goals for the week — products, audiences, campaigns</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-step-num">2</div>
+    <div class="flow-step-icon">📋</div>
+    <div class="flow-step-title">Get 3 Post Ideas</div>
+    <div class="flow-step-desc">AI generates Mon / Wed / Fri posts with briefs pre-filled</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-step-num">3</div>
+    <div class="flow-step-icon">📸</div>
+    <div class="flow-step-title">Create Each Post</div>
+    <div class="flow-step-desc">Upload your photo/video or generate one with AI — we write the caption</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-step-num">4</div>
+    <div class="flow-step-icon">⬇️</div>
+    <div class="flow-step-title">Download &amp; Post</div>
+    <div class="flow-step-desc">Review, download your edited media, copy caption, post to Instagram</div>
+  </div>
+</div>
+
+<!-- Getting started cards (no posts yet) -->
+{% if not posts %}
+<div class="callout callout-purple" style="margin-bottom:24px">
+  <div class="callout-icon">💡</div>
+  <div>
+    <strong>New here?</strong> Start with a weekly strategy to get 3 ready-to-create post ideas — or jump straight in and upload a photo.
+  </div>
+</div>
+
+<div class="grid2" style="margin-bottom:28px">
+  <a href="/client/{{ token }}/strategy" style="text-decoration:none;display:block">
+    <div class="card" style="border-color:#ddd6fe;background:linear-gradient(135deg,#f5f3ff 0%,#fff 100%);cursor:pointer;transition:all 0.2s;height:100%"
+         onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(124,58,237,0.12)'"
+         onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div style="font-size:36px;margin-bottom:14px">🗓️</div>
+      <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">Start with a Strategy</div>
+      <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px">Tell us your goals for the week. We'll write a tailored Instagram strategy and give you 3 ready-to-create post ideas for Mon, Wed &amp; Fri.</div>
+      <span class="btn btn-primary btn-sm">Get my content plan →</span>
+    </div>
+  </a>
+
+  <a href="/client/{{ token }}/upload" style="text-decoration:none;display:block">
+    <div class="card" style="cursor:pointer;transition:all 0.2s;height:100%"
+         onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,0.08)'"
+         onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div style="font-size:36px;margin-bottom:14px">📸</div>
+      <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px">Create a Post Now</div>
+      <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px">Upload a photo or video and write a quick brief. We'll edit the image, format it for Instagram, and generate a caption — ready in under a minute.</div>
+      <span class="btn btn-ghost btn-sm">Upload media →</span>
+    </div>
+  </a>
+</div>
+{% endif %}
+
+{% if posts %}
+<!-- Stats -->
+<div class="grid3" style="margin-bottom:24px">
+  <div class="stat-card">
+    <div class="stat-num" style="color:var(--green)">{{ posts|selectattr('status','equalto','posted')|list|length }}</div>
+    <div class="stat-label">✓ Posted</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" style="color:var(--accent)">{{ posts|selectattr('status','equalto','ready_for_review')|list|length }}</div>
+    <div class="stat-label">⬇️ Ready to Download</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" style="color:var(--text-secondary)">{{ posts|length }}</div>
+    <div class="stat-label">Total Posts</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Active content plan shortcut -->
+{% if latest_strategy %}
+{% set pending_items = latest_strategy.items|selectattr('status','equalto','pending')|list %}
+{% if pending_items %}
+<div class="callout callout-green" style="margin-bottom:20px">
+  <div class="callout-icon">📋</div>
+  <div style="flex:1">
+    <strong>{{ pending_items|length }} post{{ 's' if pending_items|length > 1 }} still to create</strong> in this week's plan
+    <span style="font-size:12px;color:var(--green);margin-left:6px">(week of {{ latest_strategy.week_of }})</span>
+  </div>
+  <a href="/client/{{ token }}/strategy/{{ latest_strategy.id }}/checklist"
+     class="btn btn-sm btn-green" style="flex-shrink:0;text-decoration:none">View Plan →</a>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Posts table -->
+{% if posts %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+  <div style="font-size:16px;font-weight:700;color:var(--text)">Your Posts</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <a href="/client/{{ token }}/strategy" class="btn btn-ghost btn-sm">🗓️ New Strategy</a>
+    <a href="/client/{{ token }}/upload" class="btn btn-primary btn-sm">+ Create Post</a>
+  </div>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <thead>
+      <tr>
+        <th>Preview</th>
+        <th>Brief</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in posts %}
+      <tr>
+        <td>
+          {% if p.processed_filename %}
+            {% if p.media_type == 'image' %}
+              <img src="/media/{{ p.processed_filename }}"
+                   style="height:52px;width:52px;object-fit:cover;border-radius:8px;border:1px solid var(--border)"/>
+            {% else %}
+              <div style="width:52px;height:52px;background:var(--surface2);border-radius:8px;
+                          display:flex;align-items:center;justify-content:center;font-size:24px;
+                          border:1px solid var(--border)">🎬</div>
+            {% endif %}
+          {% elif p.status == 'pending_processing' %}
+            <div style="width:52px;height:52px;background:var(--surface2);border-radius:8px;
+                        display:flex;align-items:center;justify-content:center;font-size:20px;
+                        border:1px solid var(--border)">⏳</div>
+          {% else %}
+            <div style="width:52px;height:52px;background:#fef2f2;border-radius:8px;
+                        display:flex;align-items:center;justify-content:center;font-size:20px;
+                        border:1px solid #fecaca">✕</div>
+          {% endif %}
+        </td>
+        <td style="max-width:220px">
+          <div style="font-size:13px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {% if p.brief %}{{ p.brief[:60] }}{% if p.brief|length > 60 %}…{% endif %}
+            {% else %}<span style="color:var(--muted)">No brief</span>{% endif %}
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">
+            {% if p.media_type == 'image' %}🖼️ Photo{% else %}🎬 Reel{% endif %}
+          </div>
+        </td>
+        <td>
+          {% if p.status == 'pending_processing' %}
+            <span class="badge badge-processing" data-post-id="{{ p.id }}">⏳ Processing…</span>
+          {% elif p.status == 'ready_for_review' %}
+            <span class="badge badge-review">⬇️ Ready</span>
+          {% elif p.status == 'posted' %}
+            <span class="badge badge-posted">✓ Posted</span>
+          {% elif p.status == 'failed' %}
+            <span class="badge badge-failed" title="{{ p.error_message }}">✕ Failed</span>
+          {% endif %}
+        </td>
+        <td style="color:var(--muted);font-size:13px;white-space:nowrap">
+          {{ p.created_at.strftime('%b %d, %H:%M') }}
+        </td>
+        <td>
+          {% if p.status == 'ready_for_review' %}
+            <a href="/client/{{ token }}/post/{{ p.id }}" class="btn btn-primary btn-sm">⬇️ Review</a>
+          {% elif p.status in ['failed', 'posted'] %}
+            <a href="/client/{{ token }}/post/{{ p.id }}" class="btn btn-ghost btn-sm">View</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const processingBadges = document.querySelectorAll('[data-post-id]');
+if (processingBadges.length > 0) {
+  const token = '{{ token }}';
+  processingBadges.forEach(badge => {
+    const postId = badge.dataset.postId;
+    const interval = setInterval(async () => {
+      try {
+        const resp = await fetch(`/client/${token}/post/${postId}/status`);
+        const data = await resp.json();
+        if (data.status !== 'pending_processing') {
+          clearInterval(interval);
+          window.location.reload();
+        }
+      } catch(e) {}
+    }, 4000);
+  });
+}
+</script>
+{% endblock %}

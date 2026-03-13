@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}Upload – {{ client.name }}{% endblock %}
+
+{% block sidebar %}
+<a href="/client/{{ token }}"><span class="ico">🏠</span> Dashboard</a>
+<a href="/client/{{ token }}/strategy"><span class="ico">🗓️</span> Strategy</a>
+<a href="/client/{{ token }}/upload" class="active"><span class="ico">⬆️</span> Upload</a>
+<a href="/client/{{ token }}/preferences"><span class="ico">⚙️</span> Preferences</a>
+{% endblock %}
+
+{% block content %}
+<h1>Create a Post</h1>
+<p class="subtitle">Upload your own photo or video, or describe an image and we'll generate one for you.</p>
+
+{% if plan_item %}
+<!-- Checklist item banner -->
+<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+  <span style="font-size:24px">📋</span>
+  <div style="flex:1">
+    <div style="font-size:12px;color:var(--accent);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:2px">
+      From your content plan · {{ plan_item.day }}
+    </div>
+    <div style="font-size:14px;font-weight:600;color:var(--text)">{{ plan_item.title }}</div>
+    <div style="font-size:13px;color:var(--text-secondary);margin-top:2px">{{ plan_item.description }}</div>
+  </div>
+  <a href="/client/{{ token }}/strategy/{{ plan_item.strategy_id }}/checklist"
+     class="btn btn-ghost btn-sm">← Back to Plan</a>
+</div>
+{% endif %}
+
+<!-- Mode tabs -->
+<div style="display:flex;gap:0;margin-bottom:24px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;width:fit-content">
+  <button id="tab-upload" onclick="switchTab('upload')"
+    style="padding:8px 20px;border-radius:7px;border:none;cursor:pointer;font-size:14px;font-weight:600;
+           background:var(--accent);color:#fff;transition:all 0.15s">
+    📁 Upload Media
+  </button>
+  <button id="tab-generate" onclick="switchTab('generate')"
+    style="padding:8px 20px;border-radius:7px;border:none;cursor:pointer;font-size:14px;font-weight:600;
+           background:transparent;color:var(--muted);transition:all 0.15s">
+    ✨ Generate Image
+  </button>
+</div>
+
+<!-- ── Upload tab ── -->
+<div id="panel-upload">
+  <form method="POST" action="/client/{{ token }}/upload" enctype="multipart/form-data" id="uploadForm">
+    {% if plan_item %}
+    <input type="hidden" name="plan_item_id" value="{{ plan_item.id }}"/>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-title">📁 Choose File</div>
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+        <div class="icon" id="dropIcon">📤</div>
+        <p><strong>Click to browse</strong> or drag and drop here</p>
+        <p style="margin-top:4px;font-size:12px">Photos: JPG, PNG, WEBP &nbsp;·&nbsp; Videos: MP4, MOV (up to 500 MB)</p>
+        <p id="fileName" style="margin-top:12px;color:var(--accent2);font-weight:600;display:none"></p>
+      </div>
+      <input type="file" id="fileInput" name="media"
+             accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.avi,.mkv,.m4v"
+             style="display:none" required/>
+    </div>
+
+    <div class="card">
+      <div class="card-title">✍️ Brief</div>
+      <div class="form-group">
+        <label>Tell us what this post is about — the more detail, the better the caption</label>
+        <textarea name="brief" rows="4"
+          placeholder="e.g. New summer collection drop – bold colours, relaxed fits. Targeting 25-35 women who love sustainable fashion. Mood: confident, fun, summery."
+        >{{ prefill_brief }}</textarea>
+      </div>
+    </div>
+
+    <div class="card" style="background:var(--surface2);border-style:dashed">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">⚙️</span>
+        <div>
+          <strong style="font-size:14px">Using your saved preferences</strong>
+          <p style="font-size:13px;color:var(--muted)">
+            Tone: <em style="color:var(--accent2)">{{ client.caption_tone }}</em> &nbsp;·&nbsp;
+            Filter: <em style="color:var(--accent2)">{{ client.image_filter }}</em> &nbsp;·&nbsp;
+            Crop: <em style="color:var(--accent2)">{{ client.image_crop }}</em>
+          </p>
+        </div>
+        <a href="/client/{{ token }}/preferences" class="btn btn-ghost btn-sm" style="margin-left:auto">Edit</a>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" type="submit" id="submitBtn"
+            style="width:100%;justify-content:center;padding:14px">
+      ⬆️ Upload &amp; Process
+    </button>
+
+    <div id="uploadProgress" style="display:none;text-align:center;padding:40px 0">
+      <div style="font-size:40px;margin-bottom:16px">⏳</div>
+      <p style="font-size:16px;font-weight:600">Uploading…</p>
+      <p style="color:var(--muted);font-size:14px;margin-top:6px">Please don't close this tab.</p>
+    </div>
+  </form>
+</div>
+
+<!-- ── Generate tab ── -->
+<div id="panel-generate" style="display:none">
+  <form method="POST" action="/client/{{ token }}/generate" id="generateForm">
+    {% if plan_item %}
+    <input type="hidden" name="plan_item_id" value="{{ plan_item.id }}"/>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-title">🎨 Describe Your Image</div>
+      <div class="form-group">
+        <label>What should the image show? Be as specific as you like.</label>
+        <textarea name="image_prompt" rows="4" required
+          placeholder="e.g. A flat lay of skincare products on a marble surface with fresh flowers, warm morning light, luxurious and minimal aesthetic"
+        >{{ prefill_brief if prefill_type == 'generated' else '' }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Visual Style</label>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px">
+          {% for val, label, desc in [
+            ('vivid',     '🎨 Vivid',     'Bold, punchy colours'),
+            ('natural',   '📷 Natural',   'Realistic, true-to-life'),
+            ('editorial', '🗞️ Editorial',  'Magazine, clean & minimal'),
+            ('cinematic', '🎬 Cinematic',  'Moody, dramatic lighting'),
+            ('flat',      '📦 Flat Lay',   'Overhead, product styling'),
+          ] %}
+          <label style="cursor:pointer;margin:0">
+            <input type="radio" name="image_style" value="{{ val }}"
+                   {% if val == 'vivid' %}checked{% endif %}
+                   style="display:none" class="style-radio"/>
+            <div class="style-card" data-val="{{ val }}"
+                 style="border:2px solid var(--border);border-radius:8px;padding:10px 8px;
+                        text-align:center;transition:all 0.15s;
+                        {% if val == 'vivid' %}border-color:var(--accent);background:#8b5cf611{% endif %}">
+              <div style="font-size:18px">{{ label.split(' ')[0] }}</div>
+              <div style="font-size:12px;font-weight:600;margin-top:4px">{{ label.split(' ', 1)[1] }}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">{{ desc }}</div>
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">✍️ Caption Brief</div>
+      <div class="form-group">
+        <label>What's this post about? (used to write the caption — can be different from the image description)</label>
+        <textarea name="brief" rows="3"
+          placeholder="e.g. Launching our new anti-aging serum — targeting women 35+, tone should be confident and luxurious"
+        >{{ prefill_brief }}</textarea>
+      </div>
+    </div>
+
+    <div class="card" style="background:var(--surface2);border-style:dashed">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">⚙️</span>
+        <div>
+          <strong style="font-size:14px">Using your saved preferences</strong>
+          <p style="font-size:13px;color:var(--muted)">
+            Tone: <em style="color:var(--accent2)">{{ client.caption_tone }}</em> &nbsp;·&nbsp;
+            Filter: <em style="color:var(--accent2)">{{ client.image_filter }}</em>
+          </p>
+        </div>
+        <a href="/client/{{ token }}/preferences" class="btn btn-ghost btn-sm" style="margin-left:auto">Edit</a>
+      </div>
+    </div>
+
+    <div class="callout callout-purple" style="margin-bottom:16px">
+      <div class="callout-icon">✨</div>
+      <div><strong>AI Image Generation</strong> — Each image costs ~$0.04 via DALL-E 3 and takes about 15 seconds to generate.</div>
+    </div>
+
+    <button class="btn btn-primary" type="submit"
+            style="width:100%;justify-content:center;padding:14px">
+      ✨ Generate Image &amp; Caption
+    </button>
+
+    <div id="generateProgress" style="display:none;text-align:center;padding:40px 0">
+      <div style="font-size:40px;margin-bottom:16px" id="genIcon">🎨</div>
+      <p style="font-size:16px;font-weight:600">Generating your image…</p>
+      <p style="color:var(--muted);font-size:14px;margin-top:6px">This takes about 15–20 seconds. Please don't close this tab.</p>
+    </div>
+  </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-switch to Generate tab if coming from a "generated" checklist item
+const prefillType = "{{ prefill_type }}";
+if (prefillType === 'generated') {
+  switchTab('generate');
+}
+
+// Tab switching
+function switchTab(tab) {
+  const isUpload = tab === 'upload';
+  document.getElementById('panel-upload').style.display   = isUpload ? 'block' : 'none';
+  document.getElementById('panel-generate').style.display = isUpload ? 'none'  : 'block';
+  document.getElementById('tab-upload').style.background   = isUpload ? 'var(--accent)' : 'transparent';
+  document.getElementById('tab-upload').style.color        = isUpload ? '#fff' : 'var(--muted)';
+  document.getElementById('tab-generate').style.background = isUpload ? 'transparent' : 'var(--accent)';
+  document.getElementById('tab-generate').style.color      = isUpload ? 'var(--muted)' : '#fff';
+}
+
+// File drag/drop
+const dropzone  = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileName  = document.getElementById('fileName');
+const dropIcon  = document.getElementById('dropIcon');
+
+fileInput.addEventListener('change', () => {
+  const f = fileInput.files[0];
+  if (f) {
+    fileName.textContent = f.name;
+    fileName.style.display = 'block';
+    dropIcon.textContent = f.type.startsWith('video') ? '🎬' : '🖼️';
+    dropzone.style.borderColor = 'var(--accent)';
+  }
+});
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('active'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('active'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('active');
+  if (e.dataTransfer.files.length) {
+    fileInput.files = e.dataTransfer.files;
+    fileInput.dispatchEvent(new Event('change'));
+  }
+});
+
+// Upload progress
+document.getElementById('uploadForm').addEventListener('submit', function() {
+  if (!fileInput.files.length) return;
+  this.querySelector('button[type=submit]').style.display = 'none';
+  document.getElementById('uploadProgress').style.display = 'block';
+});
+
+// Generate progress
+document.getElementById('generateForm').addEventListener('submit', function() {
+  this.querySelector('button[type=submit]').style.display = 'none';
+  document.getElementById('generateProgress').style.display = 'block';
+  const icons = ['🎨','✨','🖼️','🎭','🌟'];
+  let i = 0;
+  setInterval(() => {
+    document.getElementById('genIcon').textContent = icons[i++ % icons.length];
+  }, 1500);
+});
+
+// Style card selection
+document.querySelectorAll('.style-radio').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.style-card').forEach(card => {
+      card.style.borderColor = 'var(--border)';
+      card.style.background  = 'transparent';
+    });
+    const card = document.querySelector(`.style-card[data-val="${radio.value}"]`);
+    card.style.borderColor = 'var(--accent)';
+    card.style.background  = '#8b5cf611';
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Weekly Strategy – {{ client.name }}{% endblock %}
+
+{% block sidebar %}
+<a href="/client/{{ token }}"><span class="ico">🏠</span> Dashboard</a>
+<a href="/client/{{ token }}/strategy" class="active"><span class="ico">🗓️</span> Strategy</a>
+<a href="/client/{{ token }}/upload"><span class="ico">⬆️</span> Upload</a>
+<a href="/client/{{ token }}/preferences"><span class="ico">⚙️</span> Preferences</a>
+{% endblock %}
+
+{% block content %}
+<h1>Weekly Content Strategy</h1>
+<p class="subtitle">Tell us your goals for this week — we'll build you a tailored Instagram plan with 3 ready-to-create posts.</p>
+
+<div class="card">
+  <div class="card-title">🎯 This Week's Objectives</div>
+  <form method="POST" action="/client/{{ token }}/strategy">
+    <div class="form-group">
+      <label>What do you want to achieve this week?</label>
+      <textarea name="objectives" rows="5"
+        placeholder="e.g. Drive sign-ups for our new spring collection launch. Build awareness around our sustainability story. Reconnect with existing customers who haven't bought in 3 months."
+        required></textarea>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">
+        Be specific — mention campaigns, products, audiences, or anything you want to push this week.
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Business context <span style="color:var(--muted)">(optional — fill once, skip if unchanged)</span></label>
+      <textarea name="business_context" rows="3"
+        placeholder="e.g. We're a sustainable skincare brand targeting women 25-40 in the UK. Our tone is warm and educational. We sell direct-to-consumer online."></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">✨ Generate Strategy</button>
+  </form>
+</div>
+
+{% if strategies %}
+<div class="card">
+  <div class="card-title">📚 Previous Strategies</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Week of</th>
+        <th>Objectives</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in strategies %}
+      <tr>
+        <td style="color:var(--muted);font-size:13px;white-space:nowrap">{{ s.week_of }}</td>
+        <td style="font-size:13px;max-width:300px">
+          {{ s.objectives[:80] }}{% if s.objectives|length > 80 %}…{% endif %}
+        </td>
+        <td>
+          {% if s.status == 'generating' %}
+            <span class="badge badge-processing">⏳ Generating</span>
+          {% elif s.status == 'draft' %}
+            <span class="badge badge-review">✏️ Draft</span>
+          {% elif s.status == 'confirmed' %}
+            <span class="badge badge-posted">✓ Confirmed</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if s.status == 'confirmed' %}
+            <a href="/client/{{ token }}/strategy/{{ s.id }}/checklist"
+               class="btn btn-ghost btn-sm">View Plan</a>
+          {% else %}
+            <a href="/client/{{ token }}/strategy/{{ s.id }}/review"
+               class="btn btn-ghost btn-sm">Review</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

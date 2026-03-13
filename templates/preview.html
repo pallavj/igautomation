@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Review – {{ client.name }}{% endblock %}
+
+{% block sidebar %}
+<a href="/client/{{ token }}"><span class="ico">🏠</span> Dashboard</a>
+<a href="/client/{{ token }}/strategy"><span class="ico">🗓️</span> Weekly Strategy</a>
+<a href="/client/{{ token }}/upload"><span class="ico">⬆️</span> Create Post</a>
+<a href="/client/{{ token }}/preferences"><span class="ico">⚙️</span> My Preferences</a>
+{% endblock %}
+
+{% block content %}
+<h1>Review &amp; Download</h1>
+<p class="subtitle">Check your post, tweak the caption or image, then download and post to Instagram.</p>
+
+{% if post.status == 'pending_processing' %}
+  <div class="card" style="text-align:center;padding:72px 40px">
+    <div style="font-size:52px;margin-bottom:20px" id="spinnerIcon">⏳</div>
+    <h2 style="margin-bottom:10px">Processing your media…</h2>
+    <p style="color:var(--text-secondary);max-width:380px;margin:0 auto">
+      Editing your image and writing your caption. Usually under 60 seconds.
+    </p>
+    <div style="margin-top:24px">
+      <span class="badge badge-processing" style="font-size:14px;padding:8px 18px" id="statusNote">
+        ⏳ Working on it…
+      </span>
+    </div>
+  </div>
+
+{% elif post.status == 'failed' %}
+  <div class="card" style="text-align:center;padding:60px 40px">
+    <div style="font-size:52px;margin-bottom:20px">❌</div>
+    <h2 style="margin-bottom:10px">Something went wrong</h2>
+    <p style="color:var(--red);font-size:14px;max-width:400px;margin:0 auto">{{ post.error_message }}</p>
+    <a href="/client/{{ token }}/upload" class="btn btn-primary btn-lg" style="margin-top:24px">Try again</a>
+  </div>
+
+{% elif post.status == 'posted' %}
+  <div class="card" style="text-align:center;padding:60px 40px">
+    <div style="font-size:52px;margin-bottom:20px">✅</div>
+    <h2 style="margin-bottom:10px">Marked as posted!</h2>
+    <p style="color:var(--text-secondary)">This post has been recorded as done.</p>
+    <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;flex-wrap:wrap">
+      <a href="/client/{{ token }}" class="btn btn-ghost">← Dashboard</a>
+      <a href="/client/{{ token }}/upload" class="btn btn-primary">+ Create Another</a>
+    </div>
+  </div>
+
+{% else %}
+  <div class="callout callout-purple" style="margin-bottom:24px">
+    <div class="callout-icon">👇</div>
+    <div>
+      <strong>3 steps:</strong>
+      &nbsp;<strong>1.</strong> Download your media &nbsp;·&nbsp;
+      <strong>2.</strong> Copy the caption &nbsp;·&nbsp;
+      <strong>3.</strong> Post on Instagram and mark as done here
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+
+    <!-- Left: Media + re-edit -->
+    <div>
+      <div class="card" style="padding:20px">
+        <div class="card-title">
+          {% if post.media_type == 'image' %}🖼️ Edited Photo{% else %}🎬 Converted Reel{% endif %}
+        </div>
+        <div class="media-preview" style="margin-bottom:16px">
+          {% if post.media_type == 'image' %}
+            <img src="/media/{{ post.processed_filename }}" style="width:100%;border-radius:10px"/>
+          {% else %}
+            <video src="/media/{{ post.processed_filename }}"
+                   controls style="width:100%;border-radius:10px"></video>
+          {% endif %}
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:16px">
+          {% if post.media_type == 'image' %}Cropped &amp; colour-graded to your saved preferences.
+          {% else %}Converted to 9:16 Reels format (1080×1920).{% endif %}
+        </div>
+
+        <!-- Download CTA -->
+        <a href="/client/{{ token }}/post/{{ post.id }}/download"
+           class="btn btn-primary btn-lg" style="width:100%;justify-content:center;margin-bottom:12px">
+          ⬇️ Download {% if post.media_type == 'image' %}Photo{% else %}Reel{% endif %}
+        </a>
+
+        {% if post.media_type == 'image' %}
+        <!-- Natural language re-edit -->
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">
+            ✏️ Not quite right? Ask for an edit
+          </div>
+          <form method="POST" action="/client/{{ token }}/post/{{ post.id }}/reprocess" id="reprocessForm">
+            <div style="display:flex;gap:8px">
+              <input type="text" name="edit_request" id="editInput"
+                placeholder="e.g. make it brighter, warmer tones, don't crop it"
+                style="flex:1;font-size:13px;padding:9px 12px"/>
+              <button type="submit" class="btn btn-ghost btn-sm" id="reprocessBtn">Apply</button>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px">
+              Try: "square crop", "black and white", "more contrast", "softer matte look"
+            </div>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Mark as done -->
+      <div class="card" style="background:#f0fdf4;border-color:#bbf7d0">
+        <div class="card-title" style="color:#166534">✅ Done posting?</div>
+        <p style="font-size:13px;color:#15803d;margin-bottom:16px;line-height:1.6">
+          Once you've posted to Instagram, mark it here to keep your dashboard up to date.
+        </p>
+        <form method="POST" action="/client/{{ token }}/post/{{ post.id }}/mark_done">
+          <button class="btn btn-green btn-lg" style="width:100%;justify-content:center" type="submit">
+            ✓ Mark as Posted on Instagram
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Right: Caption -->
+    <div>
+      <div class="card">
+        <div class="card-title">✍️ Caption</div>
+        <form method="POST" action="/client/{{ token }}/post/{{ post.id }}/update">
+          <div class="form-group">
+            <textarea name="caption" rows="12" id="captionBox"
+              style="font-size:13px;line-height:1.7">{{ post.caption }}</textarea>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" type="button" onclick="copyCaption(event)">
+              📋 Copy Caption
+            </button>
+            <button class="btn btn-ghost btn-sm" type="submit">💾 Save Changes</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Regenerate caption -->
+      <div class="card" style="background:var(--surface2)">
+        <div class="card-title" style="font-size:14px;color:var(--text-secondary)">🔄 Regenerate Caption</div>
+        <form method="POST" action="/client/{{ token }}/post/{{ post.id }}/regenerate">
+          <div class="form-group">
+            <label>Update the brief and generate a fresh caption</label>
+            <textarea name="brief" rows="3" placeholder="Describe the post…">{{ post.brief }}</textarea>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="submit">✨ Regenerate</button>
+        </form>
+      </div>
+
+      <!-- Discard -->
+      <div style="text-align:right;margin-top:4px">
+        <form method="POST" action="/client/{{ token }}/post/{{ post.id }}/discard"
+              onsubmit="return confirm('Discard this post?')">
+          <button class="btn btn-ghost btn-sm" style="color:var(--muted);font-size:12px" type="submit">
+            🗑 Discard post
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if post.status == 'pending_processing' %}
+<script>
+const token = '{{ token }}';
+const postId = '{{ post.id }}';
+const statusNote = document.getElementById('statusNote');
+const spinnerIcon = document.getElementById('spinnerIcon');
+const icons = ['⏳','🔄','🎨','✨','🖼️'];
+let i = 0;
+const interval = setInterval(async () => {
+  try {
+    const resp = await fetch(`/client/${token}/post/${postId}/status`);
+    const data = await resp.json();
+    spinnerIcon.textContent = icons[i++ % icons.length];
+    if (data.status !== 'pending_processing') {
+      statusNote.textContent = '✓ Done! Refreshing…';
+      clearInterval(interval);
+      setTimeout(() => window.location.reload(), 800);
+    }
+  } catch(e) {}
+}, 3000);
+</script>
+{% endif %}
+
+<script>
+function copyCaption(e) {
+  const text = document.getElementById('captionBox').value;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = e.target;
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.style.background = 'var(--green)';
+    btn.style.color = '#fff';
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 2000);
+  });
+}
+
+// Re-edit loading state
+const reprocessForm = document.getElementById('reprocessForm');
+if (reprocessForm) {
+  reprocessForm.addEventListener('submit', function(e) {
+    const input = document.getElementById('editInput');
+    if (!input.value.trim()) { e.preventDefault(); return; }
+    const btn = document.getElementById('reprocessBtn');
+    btn.textContent = '⏳';
+    btn.disabled = true;
+    input.disabled = true;
+  });
+}
+</script>
+{% endblock %}
