@@ -83,9 +83,11 @@
           ⬇️ Download {% if post.media_type == 'image' %}Photo{% else %}Reel{% endif %}
         </a>
 
-        {% if post.media_type == 'image' %}
-        <!-- Natural language re-edit -->
+        <!-- Re-edit section — images and videos both supported -->
         <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+
+          {% if post.media_type == 'image' %}
+          <!-- Image: natural language edit -->
           <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">
             ✏️ Not quite right? Ask for an edit
           </div>
@@ -100,8 +102,43 @@
               Try: "square crop", "black and white", "more contrast", "softer matte look"
             </div>
           </form>
+
+          {% else %}
+          <!-- Video: re-grade vibe + overlay text edit -->
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">
+            🎬 Re-edit this Reel
+          </div>
+          <form method="POST" action="/client/{{ token }}/post/{{ post.id }}/reprocess_video" id="reprocessVideoForm">
+            <div class="form-group" style="margin-bottom:10px">
+              <label style="font-size:12px;font-weight:600">Change the vibe / colour grade</label>
+              <div style="display:flex;gap:8px">
+                <input type="text" name="vibe_prompt" id="vibeInput"
+                  value="{{ post.vibe_prompt or '' }}"
+                  placeholder="e.g. golden hour warm, punchy energetic, moody cinematic"
+                  style="flex:1;font-size:13px;padding:9px 12px"/>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:10px">
+              <label style="font-size:12px;font-weight:600">Text overlay</label>
+              <div style="display:flex;gap:8px">
+                <input type="text" name="overlay_text" id="overlayInput"
+                  placeholder="Leave blank to remove overlay, or type new text"
+                  style="flex:1;font-size:13px;padding:9px 12px"/>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">
+                Short punchy hook burnt into the Reel — leave blank to strip it out
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-ghost btn-sm" id="reprocessVideoBtn"
+                    style="width:100%;justify-content:center">
+              🔄 Re-process Reel
+            </button>
+          </form>
+          {% endif %}
+
         </div>
-        {% endif %}
       </div>
 
       <!-- Mark as done -->
@@ -203,7 +240,7 @@ function copyCaption(e) {
   });
 }
 
-// Re-edit loading state
+// Image re-edit loading state
 const reprocessForm = document.getElementById('reprocessForm');
 if (reprocessForm) {
   reprocessForm.addEventListener('submit', function(e) {
@@ -213,6 +250,18 @@ if (reprocessForm) {
     btn.textContent = '⏳';
     btn.disabled = true;
     input.disabled = true;
+  });
+}
+
+// Video re-edit loading state
+const reprocessVideoForm = document.getElementById('reprocessVideoForm');
+if (reprocessVideoForm) {
+  reprocessVideoForm.addEventListener('submit', function() {
+    const btn = document.getElementById('reprocessVideoBtn');
+    btn.textContent = '⏳ Re-processing…';
+    btn.disabled = true;
+    document.getElementById('vibeInput').disabled  = true;
+    document.getElementById('overlayInput').disabled = true;
   });
 }
 </script>

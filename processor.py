@@ -123,6 +123,157 @@ def process_image(original_path: str, prefs: dict) -> str:
 
 # ── Video processing ──────────────────────────────────────────────────────────
 
+# ── Multi-clip stitching ───────────────────────────────────────────────────────
+
+def _normalize_clip(path: str, max_dur: int = 0) -> str:
+    """
+    Normalize a single clip to 1080x1920 H.264 30fps AAC.
+    Optionally trims to max_dur seconds.
+    Returns path to a temp file in PROCESSED_FOLDER.
+    """
+    out_path = os.path.join(PROCESSED_FOLDER, f"_norm_{uuid.uuid4().hex}.mp4")
+    cmd = ["ffmpeg", "-y", "-i", path]
+    if max_dur and max_dur > 0:
+        cmd += ["-t", str(max_dur)]
+    cmd += [
+        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "128k", "-r", "30",
+        out_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"FFmpeg normalize error: {result.stderr[-300:]}")
+    return out_path
+
+
+def _stitch_concat(paths: list, fade: bool = False) -> str:
+    """
+    Concat clips via FFmpeg concat demuxer.
+    fade=True adds a 0.5s fade-to-black at the end of each clip before joining.
+    Returns path to stitched temp file.
+    """
+    if fade:
+        faded = []
+        try:
+            for p in paths:
+                dur = get_video_duration(p)
+                out_path = os.path.join(PROCESSED_FOLDER, f"_fade_{uuid.uuid4().hex}.mp4")
+                fade_st = max(0.0, dur - 0.5)
+                cmd = [
+                    "ffmpeg", "-y", "-i", p,
+                    "-vf", f"fade=t=out:st={fade_st:.3f}:d=0.5",
+                    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                    "-c:a", "aac", "-b:a", "128k",
+                    out_path,
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode != 0:
+                    raise RuntimeError(f"FFmpeg fade error: {result.stderr[-300:]}")
+                faded.append(out_path)
+            paths = faded
+        except Exception:
+            for p in faded:
+                try: os.remove(p)
+                except OSError: pass
+            raise
+
+    list_path = os.path.join(PROCESSED_FOLDER, f"_list_{uuid.uuid4().hex}.txt")
+    out_path  = os.path.join(PROCESSED_FOLDER, f"_stitched_{uuid.uuid4().hex}.mp4")
+    try:
+        with open(list_path, "w") as fh:
+            for p in paths:
+                fh.write(f"file '{p}'\n")
+        cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+               "-i", list_path, "-c", "copy", out_path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"FFmpeg concat error: {result.stderr[-300:]}")
+    finally:
+        try: os.remove(list_path)
+        except OSError: pass
+        if fade:
+            for p in paths:
+                try: os.remove(p)
+                except OSError: pass
+
+    return out_path
+
+
+def _stitch_xfade(paths: list, xfade_dur: float = 0.5) -> str:
+    """
+    Stitch clips with smooth crossfade transitions using FFmpeg xfade filter.
+    Returns path to stitched temp file.
+    """
+    if len(paths) == 1:
+        return paths[0]
+
+    durations = [get_video_duration(p) for p in paths]
+    cmd = ["ffmpeg", "-y"]
+    for p in paths:
+        cmd += ["-i", p]
+
+    # Build chained xfade for video
+    filter_parts = []
+    prev_label  = "[0:v]"
+    cumulative  = 0.0
+    for i in range(1, len(paths)):
+        cumulative += durations[i - 1] - xfade_dur
+        out_label = "[vout]" if i == len(paths) - 1 else f"[v{i}]"
+        filter_parts.append(
+            f"{prev_label}[{i}:v]xfade=transition=fade"
+            f":duration={xfade_dur}:offset={cumulative:.3f}{out_label}"
+        )
+        prev_label = f"[v{i}]"
+
+    # Simple audio concat
+    audio_in = "".join(f"[{i}:a]" for i in range(len(paths)))
+    filter_parts.append(f"{audio_in}concat=n={len(paths)}:v=0:a=1[aout]")
+
+    out_path = os.path.join(PROCESSED_FOLDER, f"_stitched_{uuid.uuid4().hex}.mp4")
+    cmd += [
+        "-filter_complex", ";".join(filter_parts),
+        "-map", "[vout]", "-map", "[aout]",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "128k", "-r", "30",
+        out_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"FFmpeg xfade error: {result.stderr[-300:]}")
+    return out_path
+
+
+def stitch_videos(clip_paths: list, trim_per_clip: int = 0,
+                  transition: str = "cut") -> str:
+    """
+    Stitch multiple video clips into one video ready for process_video().
+
+    Args:
+        clip_paths:    Absolute paths in desired playback order.
+        trim_per_clip: Max seconds to use from each clip (0 = full clip).
+        transition:    "cut" | "fade" | "crossfade"
+
+    Returns the path to a temp stitched file in PROCESSED_FOLDER.
+    """
+    if len(clip_paths) == 1:
+        return clip_paths[0]
+
+    # Normalise every clip to 1080x1920 H.264 so concat works cleanly
+    normalized = []
+    try:
+        for path in clip_paths:
+            normalized.append(_normalize_clip(path, max_dur=trim_per_clip))
+
+        if transition == "crossfade":
+            return _stitch_xfade(normalized)
+        else:
+            return _stitch_concat(normalized, fade=(transition == "fade"))
+    finally:
+        for p in normalized:
+            try: os.remove(p)
+            except OSError: pass
+
 def get_video_duration(path: str) -> float:
     """Return duration in seconds using ffprobe."""
     result = subprocess.run(

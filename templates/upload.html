@@ -50,16 +50,52 @@
     {% endif %}
 
     <div class="card">
-      <div class="card-title">📁 Choose File</div>
+      <div class="card-title">📁 Choose File(s)</div>
       <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
         <div class="icon" id="dropIcon">📤</div>
         <p><strong>Click to browse</strong> or drag and drop here</p>
         <p style="margin-top:4px;font-size:12px">Photos: JPG, PNG, WEBP &nbsp;·&nbsp; Videos: MP4, MOV (up to 500 MB)</p>
+        <p style="margin-top:4px;font-size:12px;color:var(--accent)">💡 Select multiple videos to stitch into one Reel</p>
         <p id="fileName" style="margin-top:12px;color:var(--accent2);font-weight:600;display:none"></p>
       </div>
       <input type="file" id="fileInput" name="media"
              accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.avi,.mkv,.m4v"
-             style="display:none" required/>
+             style="display:none" multiple/>
+
+      <!-- Multi-clip list (shown when >1 video selected) -->
+      <div id="clipListWrap" style="display:none;margin-top:16px">
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">
+          🎬 Clip order — drag or use arrows to reorder
+        </div>
+        <div id="clipList" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+
+    <!-- Multi-clip options (transition + trim) -->
+    <div id="multiClipOptions" style="display:none">
+      <div class="card" style="border-color:#0ea5e9;background:#f0f9ff">
+        <div class="card-title" style="color:#0369a1">✂️ Clip Options</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="form-group" style="margin-bottom:0">
+            <label style="font-weight:600">Transition between clips</label>
+            <select name="transition" style="width:100%;padding:9px 12px;border:1px solid var(--border);
+                    border-radius:8px;font-size:14px;background:white;color:var(--text)">
+              <option value="cut">⚡ Hard cut (instant)</option>
+              <option value="fade">⬛ Fade to black</option>
+              <option value="crossfade">🌊 Crossfade (smooth blend)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0">
+            <label style="font-weight:600">Max seconds per clip</label>
+            <input type="number" name="trim_per_clip" min="0" max="90" value="0"
+              style="width:100%;padding:9px 12px;border:1px solid var(--border);
+                     border-radius:8px;font-size:14px;background:white;color:var(--text)"/>
+            <p style="font-size:12px;color:var(--muted);margin-top:4px">0 = use full clip</p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -256,32 +292,126 @@ const fileInput = document.getElementById('fileInput');
 const fileName  = document.getElementById('fileName');
 const dropIcon  = document.getElementById('dropIcon');
 
-fileInput.addEventListener('change', () => {
-  const f = fileInput.files[0];
-  if (f) {
-    fileName.textContent = f.name;
+// Ordered store of File objects — source of truth for submission
+let fileStore = [];
+
+function isVideoFile(f) {
+  return f.type.startsWith('video') || /\.(mp4|mov|avi|mkv|m4v)$/i.test(f.name);
+}
+
+function renderClipList() {
+  const list = document.getElementById('clipList');
+  list.innerHTML = '';
+  fileStore.forEach((f, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;background:white;border:1px solid var(--border);border-radius:8px;padding:10px 14px';
+    row.draggable = true;
+    row.dataset.index = i;
+    row.innerHTML = `
+      <span style="font-size:20px;cursor:grab">⠿</span>
+      <span style="font-size:16px">${isVideoFile(f) ? '🎬' : '🖼️'}</span>
+      <span style="flex:1;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+      <span style="font-size:12px;color:var(--muted)">${(f.size/1024/1024).toFixed(1)} MB</span>
+      <button type="button" onclick="moveClip(${i},-1)" style="border:none;background:none;cursor:pointer;font-size:16px;padding:2px 4px" ${i===0?'disabled':''}>▲</button>
+      <button type="button" onclick="moveClip(${i},1)"  style="border:none;background:none;cursor:pointer;font-size:16px;padding:2px 4px" ${i===fileStore.length-1?'disabled':''}>▼</button>
+      <button type="button" onclick="removeClip(${i})"  style="border:none;background:none;cursor:pointer;font-size:16px;padding:2px 4px;color:#ef4444">✕</button>`;
+
+    // Drag-to-reorder
+    row.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', i); row.style.opacity='0.4'; });
+    row.addEventListener('dragend',   () => row.style.opacity='1');
+    row.addEventListener('dragover',  e => { e.preventDefault(); row.style.background='#f5f3ff'; });
+    row.addEventListener('dragleave', () => row.style.background='white');
+    row.addEventListener('drop', e => {
+      e.preventDefault(); row.style.background='white';
+      const from = parseInt(e.dataTransfer.getData('text/plain'));
+      const to = parseInt(row.dataset.index);
+      if (from !== to) { const tmp = fileStore[from]; fileStore[from]=fileStore[to]; fileStore[to]=tmp; updateFromStore(); }
+    });
+    list.appendChild(row);
+  });
+}
+
+function moveClip(idx, dir) {
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= fileStore.length) return;
+  [fileStore[idx], fileStore[newIdx]] = [fileStore[newIdx], fileStore[idx]];
+  updateFromStore();
+}
+
+function removeClip(idx) {
+  fileStore.splice(idx, 1);
+  updateFromStore();
+}
+
+function updateFromStore() {
+  const multi  = fileStore.length > 1;
+  const isVid  = fileStore.length > 0 && isVideoFile(fileStore[0]);
+  const anyVid = fileStore.some(isVideoFile);
+
+  document.getElementById('clipListWrap').style.display    = multi ? 'block' : 'none';
+  document.getElementById('multiClipOptions').style.display = multi ? 'block' : 'none';
+  document.getElementById('videoOptions').style.display     = anyVid ? 'block' : 'none';
+
+  if (fileStore.length === 0) {
+    fileName.style.display = 'none';
+    dropIcon.textContent   = '📤';
+    dropzone.style.borderColor = 'var(--border)';
+  } else if (fileStore.length === 1) {
+    fileName.textContent   = fileStore[0].name;
     fileName.style.display = 'block';
-    const isVideo = f.type.startsWith('video') || /\.(mp4|mov|avi|mkv|m4v)$/i.test(f.name);
-    dropIcon.textContent = isVideo ? '🎬' : '🖼️';
+    dropIcon.textContent   = isVid ? '🎬' : '🖼️';
     dropzone.style.borderColor = 'var(--accent)';
-    document.getElementById('videoOptions').style.display = isVideo ? 'block' : 'none';
+  } else {
+    fileName.textContent   = `${fileStore.length} clips selected`;
+    fileName.style.display = 'block';
+    dropIcon.textContent   = '🎬';
+    dropzone.style.borderColor = 'var(--accent)';
+    renderClipList();
   }
+}
+
+fileInput.addEventListener('change', () => {
+  fileStore = Array.from(fileInput.files);
+  updateFromStore();
+  if (fileStore.length > 1) renderClipList();
 });
+
 dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('active'); });
 dropzone.addEventListener('dragleave', () => dropzone.classList.remove('active'));
 dropzone.addEventListener('drop', e => {
   e.preventDefault(); dropzone.classList.remove('active');
   if (e.dataTransfer.files.length) {
-    fileInput.files = e.dataTransfer.files;
-    fileInput.dispatchEvent(new Event('change'));
+    fileStore = Array.from(e.dataTransfer.files);
+    updateFromStore();
+    if (fileStore.length > 1) renderClipList();
   }
 });
 
-// Upload progress
-document.getElementById('uploadForm').addEventListener('submit', function() {
-  if (!fileInput.files.length) return;
+// Upload — use fetch for multi-clip (preserves fileStore order), normal submit for single
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+  if (fileStore.length === 0) return;
+
+  e.preventDefault();
   this.querySelector('button[type=submit]').style.display = 'none';
   document.getElementById('uploadProgress').style.display = 'block';
+
+  const fd = new FormData();
+  // Files in the exact order from fileStore
+  for (const f of fileStore) fd.append('media', f);
+  // All other form fields
+  for (const el of this.elements) {
+    if (!el.name || el.name === 'media') continue;
+    if (el.type === 'checkbox') { if (el.checked) fd.append(el.name, 'on'); }
+    else if (el.type === 'radio') { if (el.checked) fd.append(el.name, el.value); }
+    else if (el.value) fd.append(el.name, el.value);
+  }
+
+  try {
+    const res = await fetch(this.action, { method: 'POST', body: fd });
+    window.location.href = res.url;   // follow redirect to dashboard
+  } catch(err) {
+    window.location.reload();
+  }
 });
 
 // Generate progress

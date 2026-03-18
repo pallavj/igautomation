@@ -79,21 +79,30 @@ def client_prefs(client: Client) -> dict:
     }
 
 
-def process_post_async(app_ctx, post_id: int, vibe_prompt: str = "", add_overlay: bool = False):
+def process_post_async(app_ctx, post_id: int, clip_paths: list = None,
+                        vibe_prompt: str = "", add_overlay: bool = False,
+                        trim_per_clip: int = 0, transition: str = "cut"):
     """Run media processing + caption generation in a background thread."""
     with app_ctx:
         post = Post.query.get(post_id)
         if not post:
             return
         client = post.client
-        prefs = client_prefs(client)
+        prefs  = client_prefs(client)
+        stitched_path = None
         try:
-            orig_path = os.path.join(proc.UPLOAD_FOLDER, post.original_filename)
+            # ── Step 1: stitch multiple clips if provided ──────────────────────
+            if clip_paths and len(clip_paths) > 1:
+                stitched_path = proc.stitch_videos(clip_paths, trim_per_clip, transition)
+                orig_path = stitched_path
+                post.media_type = "video"
+            else:
+                orig_path = os.path.join(proc.UPLOAD_FOLDER, post.original_filename)
+
+            # ── Step 2: process ────────────────────────────────────────────────
             if post.media_type == "image":
                 processed_name = proc.process_image(orig_path, prefs)
             else:
-                # ── Intelligent video processing ──────────────────────────────
-                # 1. Translate vibe prompt → FFmpeg colour-grade params
                 vibe_params = {}
                 if vibe_prompt:
                     try:
@@ -101,7 +110,6 @@ def process_post_async(app_ctx, post_id: int, vibe_prompt: str = "", add_overlay
                     except Exception:
                         pass
 
-                # 2. Auto-generate a short text overlay if requested
                 overlay_text = None
                 if add_overlay:
                     try:
@@ -125,6 +133,10 @@ def process_post_async(app_ctx, post_id: int, vibe_prompt: str = "", add_overlay
         except Exception as e:
             post.status = "failed"
             post.error_message = str(e)
+        finally:
+            if stitched_path and os.path.exists(stitched_path):
+                try: os.remove(stitched_path)
+                except OSError: pass
         db.session.commit()
 
 
@@ -220,28 +232,49 @@ def upload(token):
                                plan_item=plan_item, prefill_brief=prefill_brief,
                                prefill_type=prefill_type)
 
-    file = request.files.get("media")
-    brief = request.form.get("brief", "").strip()
+    files        = request.files.getlist("media")
+    brief        = request.form.get("brief", "").strip()
     plan_item_id = request.form.get("plan_item_id", type=int)
-    vibe_prompt = request.form.get("vibe_prompt", "").strip()
-    add_overlay = request.form.get("add_overlay") == "on"
+    vibe_prompt  = request.form.get("vibe_prompt", "").strip()
+    add_overlay  = request.form.get("add_overlay") == "on"
+    trim_per_clip = request.form.get("trim_per_clip", 0, type=int)
+    transition   = request.form.get("transition", "cut")
 
-    if not file or file.filename == "":
+    files = [f for f in files if f and f.filename]
+    if not files:
         flash("Please select a file.", "error")
         return redirect(url_for("upload", token=token))
 
-    original_ext = os.path.splitext(file.filename)[1].lower()
-    original_name = f"orig_{uuid.uuid4().hex}{original_ext}"
-    save_path = os.path.join(proc.UPLOAD_FOLDER, original_name)
-    file.save(save_path)
+    # Save all uploaded files
+    clip_paths    = []
+    original_name = None
+    media_type    = None
 
-    if proc.is_image(original_name):
-        media_type = "image"
-    elif proc.is_video(original_name):
-        media_type = "video"
-    else:
-        os.remove(save_path)
+    for i, file in enumerate(files):
+        ext  = os.path.splitext(file.filename)[1].lower()
+        name = f"orig_{uuid.uuid4().hex}{ext}"
+        path = os.path.join(proc.UPLOAD_FOLDER, name)
+        file.save(path)
+        clip_paths.append(path)
+        if i == 0:
+            original_name = name
+            if proc.is_image(name):
+                media_type = "image"
+            elif proc.is_video(name):
+                media_type = "video"
+
+    if not media_type:
+        for p in clip_paths:
+            try: os.remove(p)
+            except OSError: pass
         flash("Unsupported file type. Use JPG/PNG for images or MP4/MOV for videos.", "error")
+        return redirect(url_for("upload", token=token))
+
+    if len(clip_paths) > 1 and media_type != "video":
+        for p in clip_paths:
+            try: os.remove(p)
+            except OSError: pass
+        flash("Multi-clip stitching is only supported for videos.", "error")
         return redirect(url_for("upload", token=token))
 
     post = Post(
@@ -258,12 +291,17 @@ def upload(token):
 
     thread = threading.Thread(
         target=process_post_async,
-        args=(app.app_context(), post.id, vibe_prompt, add_overlay),
+        args=(app.app_context(), post.id,
+              clip_paths if len(clip_paths) > 1 else None,
+              vibe_prompt, add_overlay, trim_per_clip, transition),
         daemon=True,
     )
     thread.start()
 
-    flash("Upload received! Processing your media…", "success")
+    if len(clip_paths) > 1:
+        flash(f"Stitching {len(clip_paths)} clips… this may take a moment.", "success")
+    else:
+        flash("Upload received! Processing your media…", "success")
     return redirect(url_for("dashboard", token=token))
 
 
@@ -414,6 +452,70 @@ def reprocess_post_async(app_ctx, post_id: int, edit_request: str):
             post.status = "ready_for_review"
         except Exception as e:
             post.status = "ready_for_review"  # Keep existing image visible
+            post.error_message = str(e)
+        db.session.commit()
+
+
+@app.route("/client/<token>/post/<int:post_id>/reprocess_video", methods=["POST"])
+def reprocess_video(token, post_id):
+    """Re-grade a video with a new vibe and/or new text overlay."""
+    client = client_or_404(token)
+    post = Post.query.filter_by(id=post_id, client_id=client.id).first_or_404()
+
+    if post.media_type != "video" or not post.original_filename:
+        flash("Video re-edit is only available for Reels.", "error")
+        return redirect(url_for("preview", token=token, post_id=post_id))
+
+    vibe_prompt  = request.form.get("vibe_prompt", "").strip()
+    overlay_text = request.form.get("overlay_text", "").strip()
+
+    post.status = "pending_processing"
+    post.error_message = None
+    if vibe_prompt:
+        post.vibe_prompt = vibe_prompt
+    db.session.commit()
+
+    thread = threading.Thread(
+        target=reprocess_video_async,
+        args=(app.app_context(), post.id, vibe_prompt, overlay_text),
+        daemon=True,
+    )
+    thread.start()
+
+    flash("Re-processing your Reel… refresh in a moment.", "info")
+    return redirect(url_for("preview", token=token, post_id=post_id))
+
+
+def reprocess_video_async(app_ctx, post_id: int, vibe_prompt: str, overlay_text: str):
+    """Re-apply vibe colour grade and/or text overlay to an existing video."""
+    with app_ctx:
+        post = Post.query.get(post_id)
+        if not post:
+            return
+        client = post.client
+        prefs  = client_prefs(client)
+        try:
+            # Translate vibe prompt → FFmpeg params
+            vibe_params = {}
+            if vibe_prompt:
+                try:
+                    vibe_params = et.translate_video_vibe(vibe_prompt)
+                except Exception:
+                    pass
+
+            # Use supplied overlay text (empty string = no overlay)
+            final_overlay = overlay_text if overlay_text else None
+
+            orig_path = os.path.join(proc.UPLOAD_FOLDER, post.original_filename)
+            processed_name = proc.process_video(
+                orig_path, prefs,
+                vibe_params=vibe_params,
+                overlay_text=final_overlay,
+            )
+            post.processed_filename = processed_name
+            post.status = "ready_for_review"
+        except Exception as e:
+            post.status = "ready_for_review"
             post.error_message = str(e)
         db.session.commit()
 
