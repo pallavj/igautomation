@@ -44,6 +44,7 @@ with app.app_context():
         for _sql in [
             "ALTER TABLE posts ADD COLUMN plan_item_id INTEGER",
             "ALTER TABLE posts ADD COLUMN posted_at DATETIME",
+            "ALTER TABLE posts ADD COLUMN vibe_prompt TEXT",
         ]:
             try:
                 _conn.execute(db.text(_sql))
@@ -78,7 +79,7 @@ def client_prefs(client: Client) -> dict:
     }
 
 
-def process_post_async(app_ctx, post_id: int):
+def process_post_async(app_ctx, post_id: int, vibe_prompt: str = "", add_overlay: bool = False):
     """Run media processing + caption generation in a background thread."""
     with app_ctx:
         post = Post.query.get(post_id)
@@ -91,7 +92,30 @@ def process_post_async(app_ctx, post_id: int):
             if post.media_type == "image":
                 processed_name = proc.process_image(orig_path, prefs)
             else:
-                processed_name = proc.process_video(orig_path, prefs)
+                # ── Intelligent video processing ──────────────────────────────
+                # 1. Translate vibe prompt → FFmpeg colour-grade params
+                vibe_params = {}
+                if vibe_prompt:
+                    try:
+                        vibe_params = et.translate_video_vibe(vibe_prompt)
+                    except Exception:
+                        pass
+
+                # 2. Auto-generate a short text overlay if requested
+                overlay_text = None
+                if add_overlay:
+                    try:
+                        overlay_text = et.generate_video_tagline(
+                            post.brief or "", vibe_prompt
+                        )
+                    except Exception:
+                        pass
+
+                processed_name = proc.process_video(
+                    orig_path, prefs,
+                    vibe_params=vibe_params,
+                    overlay_text=overlay_text,
+                )
 
             caption = gen.generate_caption(post.brief or "", prefs)
 
@@ -199,6 +223,8 @@ def upload(token):
     file = request.files.get("media")
     brief = request.form.get("brief", "").strip()
     plan_item_id = request.form.get("plan_item_id", type=int)
+    vibe_prompt = request.form.get("vibe_prompt", "").strip()
+    add_overlay = request.form.get("add_overlay") == "on"
 
     if not file or file.filename == "":
         flash("Please select a file.", "error")
@@ -225,13 +251,14 @@ def upload(token):
         original_filename=original_name,
         status="pending_processing",
         plan_item_id=plan_item_id,
+        vibe_prompt=vibe_prompt or None,
     )
     db.session.add(post)
     db.session.commit()
 
     thread = threading.Thread(
         target=process_post_async,
-        args=(app.app_context(), post.id),
+        args=(app.app_context(), post.id, vibe_prompt, add_overlay),
         daemon=True,
     )
     thread.start()

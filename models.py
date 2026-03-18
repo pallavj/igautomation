@@ -69,6 +69,9 @@ class Post(db.Model):
     # Link back to checklist item if created from strategy
     plan_item_id = db.Column(db.Integer, db.ForeignKey("content_plan_items.id"), nullable=True)
 
+    # Video intelligence
+    vibe_prompt = db.Column(db.Text, nullable=True)   # e.g. "golden hour, warm and dreamy"
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     approved_at = db.Column(db.DateTime, nullable=True)
     posted_at = db.Column(db.DateTime, nullable=True)

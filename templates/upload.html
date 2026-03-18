@@ -87,6 +87,49 @@
       </div>
     </div>
 
+    <!-- ── Video options (shown only when a video is selected) ── -->
+    <div id="videoOptions" style="display:none">
+      <div class="card" style="border-color:#6366f1;background:#f5f3ff">
+        <div class="card-title" style="color:#4f46e5">🎬 Video Intelligence</div>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+          Describe the feel and we'll automatically colour-grade your Reel. Optionally burn in a punchy text overlay — AI generates it from your brief.
+        </p>
+
+        <div class="form-group">
+          <label style="font-weight:600">Vibe / Mood <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <input type="text" name="vibe_prompt"
+            placeholder="e.g. golden hour warm and dreamy, energetic punchy, moody cinematic, soft pastel airy…"
+            style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;
+                   font-size:14px;background:white;color:var(--text)"/>
+          <p style="font-size:12px;color:var(--muted);margin-top:6px">
+            AI translates this into brightness, contrast, colour tone, vignette, grain &amp; speed adjustments via FFmpeg.
+          </p>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
+          <input type="checkbox" name="add_overlay" id="addOverlay"
+                 style="margin-top:3px;accent-color:#6366f1"
+                 onchange="document.getElementById('customOverlayRow').style.display = this.checked ? 'block' : 'none'"/>
+          <div>
+            <label for="addOverlay" style="font-weight:600;cursor:pointer">Auto-generate text overlay</label>
+            <p style="font-size:12px;color:var(--muted);margin-top:2px">
+              AI writes a short punchy hook from your brief and burns it into the Reel in Instagram's safe zone.
+            </p>
+          </div>
+        </div>
+
+        <div id="customOverlayRow" style="display:none;margin-top:12px">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Custom overlay text <span style="font-weight:400;color:var(--muted)">(leave blank to auto-generate)</span></label>
+            <input type="text" name="overlay_text"
+              placeholder="e.g. Have you tried this yet?"
+              style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;
+                     font-size:14px;background:white;color:var(--text)"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <button class="btn btn-primary" type="submit" id="submitBtn"
             style="width:100%;justify-content:center;padding:14px">
       ⬆️ Upload &amp; Process
@@ -218,8 +261,10 @@ fileInput.addEventListener('change', () => {
   if (f) {
     fileName.textContent = f.name;
     fileName.style.display = 'block';
-    dropIcon.textContent = f.type.startsWith('video') ? '🎬' : '🖼️';
+    const isVideo = f.type.startsWith('video') || /\.(mp4|mov|avi|mkv|m4v)$/i.test(f.name);
+    dropIcon.textContent = isVideo ? '🎬' : '🖼️';
     dropzone.style.borderColor = 'var(--accent)';
+    document.getElementById('videoOptions').style.display = isVideo ? 'block' : 'none';
   }
 });
 dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('active'); });

@@ -1,5 +1,5 @@
 """
-Translate natural language image edit requests into processor parameter overrides.
+Translate natural language requests into processor/FFmpeg parameter overrides.
 Uses Claude Haiku for fast, cheap inference.
 """
 import json
@@ -60,3 +60,85 @@ JSON only, no explanation:"""
         except json.JSONDecodeError:
             pass
     return {}
+
+
+def translate_video_vibe(vibe: str) -> dict:
+    """
+    Translate a natural language vibe/feel prompt into FFmpeg color grading parameters.
+    Returns a dict of filter settings consumed by process_video().
+    """
+    prompt = f"""You translate a video "vibe" or "feel" description into FFmpeg color grading parameters.
+
+Vibe description: "{vibe}"
+
+Return ONLY a JSON object with any of these keys that differ from defaults:
+- eq_brightness: float, -0.3 to 0.3 (0 = neutral, positive = brighter)
+- eq_contrast: float, 0.7 to 1.5 (1 = neutral, higher = more contrast)
+- eq_saturation: float, 0.0 to 2.5 (1 = neutral, 0 = black & white, higher = vivid)
+- eq_gamma: float, 0.7 to 1.4 (1 = neutral, lower = darker shadows, higher = lifted/airy)
+- hue_shift: int, -30 to 30 (0 = no shift, positive = warmer/yellower, negative = cooler/bluer)
+- vignette: bool (true = dark edges for cinematic look)
+- grain: float, 0 to 0.05 (0 = no grain, 0.03 = subtle film grain)
+- speed: float, 0.75 to 1.5 (1 = normal, 0.8 = slow-mo feel, 1.25 = energetic)
+
+Examples:
+"golden hour, warm and dreamy"   → {{"eq_brightness": 0.05, "eq_saturation": 1.2, "eq_gamma": 1.1, "hue_shift": 12, "vignette": true}}
+"energetic gym reel, punchy"     → {{"eq_contrast": 1.3, "eq_saturation": 1.4, "speed": 1.15}}
+"moody dark cinematic"           → {{"eq_brightness": -0.1, "eq_contrast": 1.25, "eq_saturation": 0.85, "eq_gamma": 0.85, "vignette": true, "grain": 0.025}}
+"soft airy and pastel"           → {{"eq_brightness": 0.1, "eq_contrast": 0.85, "eq_saturation": 0.7, "eq_gamma": 1.2}}
+"black and white editorial"      → {{"eq_saturation": 0.0, "eq_contrast": 1.2, "grain": 0.02}}
+"vibrant tropical"               → {{"eq_saturation": 1.8, "eq_brightness": 0.05, "hue_shift": 5}}
+"slow-mo beach vibes"            → {{"eq_brightness": 0.08, "eq_saturation": 1.1, "hue_shift": 8, "speed": 0.8}}
+"cool blue minimal"              → {{"eq_saturation": 0.8, "eq_contrast": 1.1, "hue_shift": -12}}
+
+JSON only, no explanation:"""
+
+    message = _client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=200,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    text = message.content[0].text.strip()
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+    return {}
+
+
+def generate_video_tagline(brief: str, vibe: str = "") -> str:
+    """
+    Generate a short punchy text overlay for a video from the post brief.
+    Returns a 1–2 line tagline (max ~8 words per line) suitable for burning into a Reel.
+    """
+    vibe_note = f" The video vibe is: {vibe}." if vibe else ""
+    prompt = f"""Write a short, punchy text overlay for an Instagram Reel.{vibe_note}
+
+Post brief: "{brief}"
+
+Rules:
+- Maximum 8 words per line, 1 or 2 lines total
+- No hashtags, no punctuation at the end
+- Impactful, scroll-stopping, conversational
+- Could be a question, a bold statement, or a hook
+- Do NOT include quotation marks in your answer
+
+Examples of good overlays:
+"Ever felt more alive near the sea"
+"This changed my morning routine"
+"You need to try this"
+"The best kept secret in Goa"
+"Why your skin needs this now"
+
+Reply with ONLY the overlay text, nothing else:"""
+
+    message = _client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=80,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    return message.content[0].text.strip().strip('"').strip("'")

@@ -136,14 +136,44 @@ def get_video_duration(path: str) -> float:
         return 0.0
 
 
-def process_video(original_path: str, prefs: dict) -> str:
+def _has_audio(path: str) -> bool:
+    """Return True if the video file has at least one audio stream."""
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0",
+         "-show_entries", "stream=codec_type", "-of", "csv=p=0", path],
+        capture_output=True, text=True
+    )
+    return "audio" in result.stdout
+
+
+def _wrap_text(text: str, max_chars: int = 32) -> str:
+    """Word-wrap text to max_chars per line."""
+    words = text.split()
+    lines, current = [], ""
+    for word in words:
+        test = (current + " " + word).strip()
+        if len(test) <= max_chars:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return "\n".join(lines)
+
+
+def process_video(original_path: str, prefs: dict,
+                  vibe_params: dict = None, overlay_text: str = None) -> str:
     """
     Convert a video to Instagram Reels format (9:16, 1080x1920, H.264+AAC).
+    Optionally applies colour grading from vibe_params and burns in a text overlay.
     Trims to max_duration if needed.
     Returns the filename (not full path) of the processed video.
     """
     max_dur = min(int(prefs.get("reel_max_duration", 60)), 90)
     trim_strategy = prefs.get("reel_trim_strategy", "trim")
+    vibe = vibe_params or {}
 
     duration = get_video_duration(original_path)
 
@@ -156,24 +186,90 @@ def process_video(original_path: str, prefs: dict) -> str:
     out_name = f"reel_{uuid.uuid4().hex}.mp4"
     out_path = os.path.join(PROCESSED_FOLDER, out_name)
 
-    # Build ffmpeg filter:
-    # 1. Scale so the shortest side fills 1080/1920
-    # 2. Pad to exactly 1080x1920 with black bars if needed (keeps aspect ratio)
-    vf = (
+    # ── Build video filter chain ───────────────────────────────────────────────
+    filters = []
+
+    # 1. Scale + crop to 9:16 Reels format (always applied)
+    filters.append(
         "scale=1080:1920:force_original_aspect_ratio=increase,"
         "crop=1080:1920"
     )
 
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", original_path,
-    ]
+    # 2. Colour grading via FFmpeg eq filter
+    brightness  = float(vibe.get("eq_brightness", 0.0))
+    contrast    = float(vibe.get("eq_contrast", 1.0))
+    saturation  = float(vibe.get("eq_saturation", 1.0))
+    gamma       = float(vibe.get("eq_gamma", 1.0))
+    if brightness != 0.0 or contrast != 1.0 or saturation != 1.0 or gamma != 1.0:
+        filters.append(
+            f"eq=brightness={brightness:.3f}"
+            f":contrast={contrast:.3f}"
+            f":saturation={saturation:.3f}"
+            f":gamma={gamma:.3f}"
+        )
+
+    # 3. Hue shift for warm/cool toning
+    hue_shift = int(vibe.get("hue_shift", 0))
+    if hue_shift != 0:
+        filters.append(f"hue=h={hue_shift}")
+
+    # 4. Cinematic vignette
+    if vibe.get("vignette", False):
+        filters.append("vignette=PI/5")
+
+    # 5. Subtle film grain  (alls 0–30 mapped from grain 0–0.05)
+    grain = float(vibe.get("grain", 0.0))
+    if grain > 0:
+        strength = max(1, int(grain * 600))   # 0.02 → 12, 0.05 → 30
+        filters.append(f"noise=alls={strength}:allf=t+u")
+
+    # 6. Text overlay — positioned in Instagram-safe zone (above bottom 14%)
+    textfile_path = None
+    if overlay_text:
+        wrapped = _wrap_text(overlay_text, max_chars=32)
+        textfile_path = os.path.join(
+            PROCESSED_FOLDER, f"_txt_{uuid.uuid4().hex}.txt"
+        )
+        with open(textfile_path, "w") as fh:
+            fh.write(wrapped)
+        # y=h*0.74 keeps text well above the IG grid crop zone
+        filters.append(
+            f"drawtext=textfile={textfile_path}"
+            ":fontsize=52"
+            ":fontcolor=white"
+            ":x=(w-text_w)/2"
+            ":y=h*0.74"
+            ":box=1"
+            ":boxcolor=black@0.55"
+            ":boxborderw=22"
+            ":line_spacing=12"
+        )
+
+    # 7. Speed adjustment (setpts)
+    speed = float(vibe.get("speed", 1.0))
+    speed = max(0.75, min(1.5, speed))   # clamp to safe range
+    if speed != 1.0:
+        pts_factor = 1.0 / speed
+        filters.append(f"setpts={pts_factor:.4f}*PTS")
+
+    vf = ",".join(filters)
+
+    # ── Build ffmpeg command ───────────────────────────────────────────────────
+    cmd = ["ffmpeg", "-y", "-i", original_path]
 
     if duration > max_dur:
         cmd += ["-t", str(max_dur)]
 
+    cmd += ["-vf", vf]
+
+    # Audio speed adjustment (atempo must be 0.5–2.0)
+    has_audio = _has_audio(original_path)
+    if speed != 1.0 and has_audio:
+        cmd += ["-filter:a", f"atempo={speed:.3f}"]
+    elif not has_audio:
+        cmd += ["-an"]
+
     cmd += [
-        "-vf", vf,
         "-c:v", "libx264",
         "-preset", "fast",
         "-crf", "23",
@@ -185,7 +281,16 @@ def process_video(original_path: str, prefs: dict) -> str:
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
+
+    # Clean up temp text file
+    if textfile_path and os.path.exists(textfile_path):
+        try:
+            os.remove(textfile_path)
+        except OSError:
+            pass
+
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg error: {result.stderr[-500:]}")
 
     return out_name
+
