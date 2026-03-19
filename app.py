@@ -52,6 +52,16 @@ with app.app_context():
             except Exception:
                 pass  # Column already exists — safe to ignore
 
+    # On every startup, mark any stuck pending_processing posts as failed.
+    # Background threads are killed on server restart, so these would hang forever.
+    from models import Post as _Post
+    stuck = _Post.query.filter_by(status="pending_processing").all()
+    for _p in stuck:
+        _p.status = "failed"
+        _p.error_message = "Processing was interrupted (server restarted). Please re-upload."
+    if stuck:
+        db.session.commit()
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
