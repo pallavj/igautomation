@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+{% block title %}Batch Upload – {{ client.name }}{% endblock %}
+
+{% block sidebar %}
+<a href="/client/{{ token }}"><span class="ico">🏠</span> Dashboard</a>
+<a href="/client/{{ token }}/strategy"><span class="ico">🗓️</span> Strategy</a>
+<a href="/client/{{ token }}/upload"><span class="ico">⬆️</span> Create Post</a>
+<a href="/client/{{ token }}/batch_upload" class="active"><span class="ico">🚀</span> Batch Upload</a>
+<a href="/client/{{ token }}/preferences"><span class="ico">⚙️</span> Preferences</a>
+{% endblock %}
+
+{% block content %}
+<h1>Batch Upload</h1>
+<p class="subtitle">Upload up to {{ max_slots }} posts at once — they'll all process in parallel and appear on your dashboard simultaneously.</p>
+
+<div class="callout callout-purple" style="margin-bottom:24px">
+  <div class="callout-icon">⚡</div>
+  <div>
+    <strong>How it works:</strong> Fill in each slot below with a media file and a brief. All posts will be queued and processed at the same time — no waiting for one to finish before the next starts.
+  </div>
+</div>
+
+<form id="batchForm" method="POST" action="/client/{{ token }}/batch_upload" enctype="multipart/form-data">
+
+  <div id="slotsContainer">
+    <!-- Slot 1 always visible -->
+    <div class="batch-slot" id="slot-1" data-slot="1">
+      <div class="card" style="border-left:4px solid var(--accent)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-weight:700;font-size:15px;color:var(--text)">
+            <span style="background:var(--accent);color:white;border-radius:50%;width:24px;height:24px;
+                         display:inline-flex;align-items:center;justify-content:center;font-size:12px;
+                         margin-right:8px">1</span>
+            Post 1
+          </div>
+          <div class="slot-status" style="font-size:12px;color:var(--muted)">Empty</div>
+        </div>
+
+        <!-- File picker -->
+        <div class="slot-dropzone" id="dz-1"
+             onclick="document.getElementById('media_1').click()"
+             style="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;
+                    cursor:pointer;transition:all 0.2s;margin-bottom:12px">
+          <div class="slot-icon" style="font-size:28px;margin-bottom:8px">📤</div>
+          <div style="font-size:13px;font-weight:600">Click to select a photo or video</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">JPG, PNG, MP4, MOV</div>
+          <div class="slot-filename" style="display:none;margin-top:8px;font-size:13px;
+                                           font-weight:600;color:var(--accent2)"></div>
+        </div>
+        <input type="file" name="media_1" id="media_1"
+               accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.avi,.mkv,.m4v"
+               style="display:none" onchange="handleSlotFile(1, this)"/>
+
+        <!-- Brief -->
+        <div class="form-group" style="margin-bottom:10px">
+          <label style="font-size:13px">Brief <span style="color:var(--muted);font-weight:400">(optional but helps captions)</span></label>
+          <textarea name="brief_1" rows="2"
+            placeholder="e.g. New summer collection drop – bold colours, targeting 25–35 women…"
+            style="font-size:13px"></textarea>
+        </div>
+
+        <!-- Video options (hidden until video selected) -->
+        <div class="slot-video-opts" style="display:none">
+          <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:12px;margin-top:4px">
+            <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:10px">🎬 Reel Options</div>
+            <div class="form-group" style="margin-bottom:8px">
+              <label style="font-size:12px">Vibe / Mood (optional)</label>
+              <input type="text" name="vibe_1"
+                placeholder="e.g. golden hour warm, energetic punchy, moody cinematic"
+                style="font-size:12px;padding:8px 10px"/>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" name="overlay_1" id="overlay_1" style="accent-color:#6366f1"/>
+              <label for="overlay_1" style="font-size:12px;cursor:pointer;font-weight:600">
+                Auto-generate text overlay from brief
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add slot button -->
+  <div id="addSlotWrap" style="text-align:center;margin-bottom:20px">
+    <button type="button" onclick="addSlot()" id="addSlotBtn"
+            class="btn btn-ghost"
+            style="width:100%;border:2px dashed var(--border);padding:14px;
+                   font-size:14px;color:var(--muted);justify-content:center">
+      ＋ Add another post ({{ max_slots - 1 }} more available)
+    </button>
+  </div>
+
+  <!-- Prefs reminder -->
+  <div class="card" style="background:var(--surface2);border-style:dashed;margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">⚙️</span>
+      <div>
+        <strong style="font-size:14px">Using your saved preferences for all posts</strong>
+        <p style="font-size:13px;color:var(--muted)">
+          Tone: <em style="color:var(--accent2)">{{ client.caption_tone }}</em> &nbsp;·&nbsp;
+          Filter: <em style="color:var(--accent2)">{{ client.image_filter }}</em> &nbsp;·&nbsp;
+          Crop: <em style="color:var(--accent2)">{{ client.image_crop }}</em>
+        </p>
+      </div>
+      <a href="/client/{{ token }}/preferences" class="btn btn-ghost btn-sm" style="margin-left:auto">Edit</a>
+    </div>
+  </div>
+
+  <button type="submit" id="submitBtn" class="btn btn-primary"
+          style="width:100%;justify-content:center;padding:14px;font-size:16px">
+    🚀 Upload &amp; Process All Posts
+  </button>
+
+  <div id="batchProgress" style="display:none;text-align:center;padding:40px 0">
+    <div style="font-size:48px;margin-bottom:16px" id="progressIcon">🚀</div>
+    <p style="font-size:16px;font-weight:700">Uploading all posts…</p>
+    <p style="color:var(--muted);font-size:14px;margin-top:6px">Please don't close this tab.</p>
+    <div id="progressDetail" style="font-size:13px;color:var(--accent2);margin-top:10px"></div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MAX_SLOTS = {{ max_slots }};
+let slotCount = 1;
+
+// Slot colour accents cycle
+const accentColors = ['var(--accent)', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444'];
+
+function addSlot() {
+  if (slotCount >= MAX_SLOTS) return;
+  slotCount++;
+  const idx  = slotCount;
+  const color = accentColors[(idx - 1) % accentColors.length];
+
+  const div = document.createElement('div');
+  div.className  = 'batch-slot';
+  div.id         = `slot-${idx}`;
+  div.dataset.slot = idx;
+  div.innerHTML  = `
+    <div class="card" style="border-left:4px solid ${color}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-weight:700;font-size:15px;color:var(--text)">
+          <span style="background:${color};color:white;border-radius:50%;width:24px;height:24px;
+                       display:inline-flex;align-items:center;justify-content:center;font-size:12px;
+                       margin-right:8px">${idx}</span>
+          Post ${idx}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="slot-status" style="font-size:12px;color:var(--muted)">Empty</div>
+          <button type="button" onclick="removeSlot(${idx})"
+                  style="border:none;background:none;cursor:pointer;font-size:16px;
+                         color:var(--muted);padding:2px 4px" title="Remove slot">✕</button>
+        </div>
+      </div>
+
+      <div class="slot-dropzone" id="dz-${idx}"
+           onclick="document.getElementById('media_${idx}').click()"
+           style="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;
+                  cursor:pointer;transition:all 0.2s;margin-bottom:12px">
+        <div class="slot-icon" style="font-size:28px;margin-bottom:8px">📤</div>
+        <div style="font-size:13px;font-weight:600">Click to select a photo or video</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">JPG, PNG, MP4, MOV</div>
+        <div class="slot-filename" style="display:none;margin-top:8px;font-size:13px;
+                                         font-weight:600;color:var(--accent2)"></div>
+      </div>
+      <input type="file" name="media_${idx}" id="media_${idx}"
+             accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.avi,.mkv,.m4v"
+             style="display:none" onchange="handleSlotFile(${idx}, this)"/>
+
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="font-size:13px">Brief <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <textarea name="brief_${idx}" rows="2"
+          placeholder="What's this post about? Tell us for a better caption."
+          style="font-size:13px"></textarea>
+      </div>
+
+      <div class="slot-video-opts" style="display:none">
+        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:12px;margin-top:4px">
+          <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:10px">🎬 Reel Options</div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label style="font-size:12px">Vibe / Mood (optional)</label>
+            <input type="text" name="vibe_${idx}"
+              placeholder="e.g. golden hour warm, energetic punchy, moody cinematic"
+              style="font-size:12px;padding:8px 10px"/>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" name="overlay_${idx}" id="overlay_${idx}" style="accent-color:#6366f1"/>
+            <label for="overlay_${idx}" style="font-size:12px;cursor:pointer;font-weight:600">
+              Auto-generate text overlay from brief
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('slotsContainer').appendChild(div);
+  updateAddButton();
+}
+
+function removeSlot(idx) {
+  const el = document.getElementById(`slot-${idx}`);
+  if (el) el.remove();
+  // Decrement if it was the last slot (simplification — we don't re-number)
+  if (idx === slotCount) slotCount--;
+  updateAddButton();
+}
+
+function updateAddButton() {
+  const remaining = MAX_SLOTS - document.querySelectorAll('.batch-slot').length;
+  const btn = document.getElementById('addSlotBtn');
+  if (remaining <= 0) {
+    btn.style.display = 'none';
+  } else {
+    btn.style.display = '';
+    btn.textContent = `＋ Add another post (${remaining} more available)`;
+  }
+}
+
+function isVideo(filename) {
+  return /\.(mp4|mov|avi|mkv|m4v)$/i.test(filename);
+}
+
+function handleSlotFile(idx, input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const dz       = document.getElementById(`dz-${idx}`);
+  const nameEl   = dz.querySelector('.slot-filename');
+  const iconEl   = dz.querySelector('.slot-icon');
+  const statusEl = document.querySelector(`#slot-${idx} .slot-status`);
+  const videoOpts = document.querySelector(`#slot-${idx} .slot-video-opts`);
+
+  const vid = isVideo(file.name);
+  iconEl.textContent  = vid ? '🎬' : '🖼️';
+  nameEl.textContent  = file.name;
+  nameEl.style.display = 'block';
+  dz.style.borderColor = 'var(--accent)';
+  dz.style.background  = '#8b5cf611';
+  statusEl.textContent = `${vid ? 'Video' : 'Photo'} · ${(file.size/1024/1024).toFixed(1)} MB`;
+  statusEl.style.color = 'var(--accent2)';
+
+  // Show/hide video options
+  videoOpts.style.display = vid ? 'block' : 'none';
+}
+
+// Drag and drop on each dropzone
+document.addEventListener('dragover', e => {
+  const dz = e.target.closest('.slot-dropzone');
+  if (dz) { e.preventDefault(); dz.style.background = '#ede9fe'; }
+});
+document.addEventListener('dragleave', e => {
+  const dz = e.target.closest('.slot-dropzone');
+  if (dz) dz.style.background = '';
+});
+document.addEventListener('drop', e => {
+  const dz = e.target.closest('.slot-dropzone');
+  if (!dz) return;
+  e.preventDefault();
+  dz.style.background = '';
+  const slot = dz.id.replace('dz-', '');
+  const input = document.getElementById(`media_${slot}`);
+  if (e.dataTransfer.files.length && input) {
+    // Programmatically set files on the input (Chrome/FF support DataTransfer)
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(e.dataTransfer.files[0]);
+      input.files = dt.files;
+      handleSlotFile(parseInt(slot), input);
+    } catch(err) {}
+  }
+});
+
+// Submit — show progress
+document.getElementById('batchForm').addEventListener('submit', function(e) {
+  // Count how many slots have files
+  const slots = document.querySelectorAll('.batch-slot');
+  let count = 0;
+  slots.forEach(slot => {
+    const idx   = slot.dataset.slot;
+    const input = document.getElementById(`media_${idx}`);
+    if (input && input.files.length > 0) count++;
+  });
+
+  if (count === 0) {
+    e.preventDefault();
+    alert('Please add at least one file before uploading.');
+    return;
+  }
+
+  document.getElementById('submitBtn').style.display    = 'none';
+  document.getElementById('addSlotWrap').style.display  = 'none';
+  document.getElementById('batchProgress').style.display = 'block';
+  document.getElementById('progressDetail').textContent =
+    `Processing ${count} post${count > 1 ? 's' : ''} in parallel…`;
+
+  const icons = ['🚀', '⚡', '🎨', '🔄', '✨'];
+  let i = 0;
+  setInterval(() => {
+    document.getElementById('progressIcon').textContent = icons[i++ % icons.length];
+  }, 800);
+});
+</script>
+{% endblock %}

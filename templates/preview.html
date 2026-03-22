@@ -194,6 +194,46 @@
           </button>
         </form>
       </div>
+
+      <!-- Schedule with Publer -->
+      {% if client.publer_api_key and client.publer_account_id %}
+      <div class="card" style="border-color:#0ea5e9;background:#f0f9ff;margin-top:0">
+        <div class="card-title" style="color:#0369a1">📅 Schedule with Publer</div>
+        {% if post.scheduled_at %}
+        <div style="font-size:13px;color:#059669;font-weight:600;margin-bottom:12px">
+          ✅ Scheduled for {{ post.scheduled_at[:16].replace('T', ' ') }} UTC
+        </div>
+        {% endif %}
+        <form method="POST" action="/client/{{ token }}/post/{{ post.id }}/schedule_publer"
+              id="publerForm">
+          <div class="form-group" style="margin-bottom:10px">
+            <label style="font-size:13px;font-weight:600">Date &amp; time to post</label>
+            <input type="datetime-local" name="scheduled_at" id="scheduledAt"
+                   style="width:100%;padding:9px 12px;border:1px solid var(--border);
+                          border-radius:8px;font-size:14px;background:white;color:var(--text)"/>
+            <p style="font-size:11px;color:var(--muted);margin-top:4px">
+              Time is in your local timezone — Publer will convert to UTC automatically.
+            </p>
+          </div>
+          <button type="submit" class="btn btn-sm" id="publerBtn"
+                  style="width:100%;justify-content:center;background:#0369a1;color:white;border:none">
+            📅 Schedule on Instagram via Publer
+          </button>
+        </form>
+      </div>
+      {% else %}
+      <div class="card" style="background:var(--surface2);border-style:dashed;margin-top:0">
+        <div style="font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:8px">
+          <span>📅</span>
+          <div>
+            <strong>Want to schedule directly to Instagram?</strong><br/>
+            <a href="/client/{{ token }}/preferences" style="color:var(--accent)">
+              Connect Publer in Preferences →
+            </a>
+          </div>
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
 {% endif %}
@@ -262,6 +302,27 @@ if (reprocessVideoForm) {
     btn.disabled = true;
     document.getElementById('vibeInput').disabled  = true;
     document.getElementById('overlayInput').disabled = true;
+  });
+}
+
+// Publer schedule form — default to tomorrow at 09:00 local time
+const scheduledAtInput = document.getElementById('scheduledAt');
+if (scheduledAtInput) {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(9, 0, 0, 0);
+  // Format as "YYYY-MM-DDTHH:MM" (datetime-local format)
+  const pad = n => String(n).padStart(2, '0');
+  scheduledAtInput.value = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth()+1)}-${pad(tomorrow.getDate())}T09:00`;
+  scheduledAtInput.min   = new Date().toISOString().slice(0, 16);
+}
+
+const publerForm = document.getElementById('publerForm');
+if (publerForm) {
+  publerForm.addEventListener('submit', function() {
+    const btn = document.getElementById('publerBtn');
+    btn.textContent = '⏳ Uploading to Publer…';
+    btn.disabled = true;
   });
 }
 </script>

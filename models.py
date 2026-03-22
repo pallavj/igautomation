@@ -36,6 +36,11 @@ class Client(db.Model):
     caption_emoji = db.Column(db.Boolean, default=True)
     caption_length = db.Column(db.String(20), default="medium")
 
+    # Publer scheduling integration
+    publer_api_key       = db.Column(db.String(200), nullable=True)
+    publer_workspace_id  = db.Column(db.String(100), nullable=True)
+    publer_account_id    = db.Column(db.String(100), nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     posts = db.relationship("Post", backref="client", lazy=True, cascade="all, delete-orphan")

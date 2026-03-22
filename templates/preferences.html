@@ -137,6 +137,55 @@
     </div>
   </div>
 
+  <!-- Publer scheduling integration -->
+  <div class="card" style="border-color:#0ea5e9;background:#f0f9ff">
+    <div class="card-title" style="color:#0369a1">📅 Scheduling Integration (Publer)</div>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.6">
+      Connect <strong>Publer</strong> to schedule posts directly to Instagram from the preview page — no need to manually copy &amp; paste.
+      <a href="https://publer.com" target="_blank" style="color:#0369a1">Get a free Publer account →</a>
+    </p>
+
+    <div class="callout" style="background:#dbeafe;border:1px solid #bfdbfe;margin-bottom:16px;padding:12px 16px;border-radius:8px">
+      <div style="font-size:12px;color:#1e40af;line-height:1.7">
+        <strong>Setup:</strong><br/>
+        1. Sign up at <a href="https://publer.com" target="_blank" style="color:#1d4ed8">publer.com</a> and connect your Instagram account.<br/>
+        2. Go to <strong>Settings → Integrations → API</strong> and copy your API key.<br/>
+        3. Your Workspace ID appears in the URL: <code style="background:#eff6ff;padding:1px 4px;border-radius:3px">publer.com/workspaces/<strong>YOUR_ID</strong></code><br/>
+        4. Your Account ID is the Publer ID of your connected Instagram profile (found in the API or account settings).
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="form-group">
+        <label>API Key</label>
+        <input type="password" name="publer_api_key"
+               value="{{ client.publer_api_key or '' }}"
+               placeholder="Your Publer API key"
+               autocomplete="off"/>
+        <p style="font-size:12px;color:var(--muted);margin-top:4px">Stored securely. Leave blank to keep existing key.</p>
+      </div>
+      <div class="form-group">
+        <label>Workspace ID</label>
+        <input type="text" name="publer_workspace_id"
+               value="{{ client.publer_workspace_id or '' }}"
+               placeholder="e.g. 12345"/>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Instagram Account ID <span style="font-weight:400;color:var(--muted)">(Publer's ID for your Instagram profile)</span></label>
+      <input type="text" name="publer_account_id"
+             value="{{ client.publer_account_id or '' }}"
+             placeholder="e.g. ig_67890"/>
+    </div>
+
+    {% if client.publer_api_key %}
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#059669;font-weight:600">
+      <span>✅</span> Publer credentials saved
+    </div>
+    {% endif %}
+  </div>
+
   <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;padding:14px">
     💾 Save Preferences
   </button>

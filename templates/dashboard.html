@@ -5,6 +5,7 @@
 <a href="/client/{{ token }}" class="active"><span class="ico">🏠</span> Dashboard</a>
 <a href="/client/{{ token }}/strategy"><span class="ico">🗓️</span> Weekly Strategy</a>
 <a href="/client/{{ token }}/upload"><span class="ico">⬆️</span> Create Post</a>
+<a href="/client/{{ token }}/batch_upload"><span class="ico">🚀</span> Batch Upload</a>
 <a href="/client/{{ token }}/preferences"><span class="ico">⚙️</span> My Preferences</a>
 {% endblock %}
 
@@ -114,6 +115,7 @@
   <div style="font-size:16px;font-weight:700;color:var(--text)">Your Posts</div>
   <div style="display:flex;gap:10px;flex-wrap:wrap">
     <a href="/client/{{ token }}/strategy" class="btn btn-ghost btn-sm">🗓️ New Strategy</a>
+    <a href="/client/{{ token }}/batch_upload" class="btn btn-ghost btn-sm">🚀 Batch Upload</a>
     <a href="/client/{{ token }}/upload" class="btn btn-primary btn-sm">+ Create Post</a>
   </div>
 </div>

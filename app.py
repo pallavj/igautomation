@@ -20,6 +20,7 @@ import generator as gen
 import image_generator as imggen
 import strategy_generator as sg
 import edit_translator as et
+import scheduler as sched
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,11 @@ with app.app_context():
             "ALTER TABLE posts ADD COLUMN plan_item_id INTEGER",
             "ALTER TABLE posts ADD COLUMN posted_at DATETIME",
             "ALTER TABLE posts ADD COLUMN vibe_prompt TEXT",
+            "ALTER TABLE posts ADD COLUMN scheduled_at TEXT",
+            "ALTER TABLE posts ADD COLUMN publer_post_id TEXT",
+            "ALTER TABLE clients ADD COLUMN publer_api_key TEXT",
+            "ALTER TABLE clients ADD COLUMN publer_workspace_id TEXT",
+            "ALTER TABLE clients ADD COLUMN publer_account_id TEXT",
         ]:
             try:
                 _conn.execute(db.text(_sql))
@@ -218,6 +224,13 @@ def preferences(token):
         client.caption_hashtags   = f.get("caption_hashtags") == "on"
         client.caption_emoji      = f.get("caption_emoji") == "on"
         client.caption_length     = f.get("caption_length", "medium")
+        # Publer scheduling
+        publer_key = f.get("publer_api_key", "").strip()
+        publer_wid = f.get("publer_workspace_id", "").strip()
+        publer_aid = f.get("publer_account_id", "").strip()
+        if publer_key:  client.publer_api_key      = publer_key
+        if publer_wid:  client.publer_workspace_id = publer_wid
+        if publer_aid:  client.publer_account_id   = publer_aid
         db.session.commit()
         flash("Preferences saved!", "success")
         return redirect(url_for("dashboard", token=token))
@@ -313,6 +326,137 @@ def upload(token):
     else:
         flash("Upload received! Processing your media…", "success")
     return redirect(url_for("dashboard", token=token))
+
+
+# ── Batch Upload (multiple posts in parallel) ─────────────────────────────────
+
+MAX_BATCH_SLOTS = 5
+
+@app.route("/client/<token>/batch_upload", methods=["GET", "POST"])
+def batch_upload(token):
+    client = client_or_404(token)
+    if request.method == "GET":
+        return render_template("batch_upload.html", client=client, token=token,
+                               max_slots=MAX_BATCH_SLOTS)
+
+    # Collect all slots that have both a file and a brief
+    launched = 0
+    errors   = []
+
+    for i in range(1, MAX_BATCH_SLOTS + 1):
+        file  = request.files.get(f"media_{i}")
+        brief = request.form.get(f"brief_{i}", "").strip()
+        vibe_prompt  = request.form.get(f"vibe_{i}", "").strip()
+        add_overlay  = request.form.get(f"overlay_{i}") == "on"
+
+        if not file or not file.filename:
+            continue   # empty slot — skip
+
+        ext  = os.path.splitext(file.filename)[1].lower()
+        name = f"orig_{uuid.uuid4().hex}{ext}"
+        path = os.path.join(proc.UPLOAD_FOLDER, name)
+
+        try:
+            file.save(path)
+        except Exception as e:
+            errors.append(f"Slot {i}: could not save file — {e}")
+            continue
+
+        if proc.is_image(name):
+            media_type = "image"
+        elif proc.is_video(name):
+            media_type = "video"
+        else:
+            try: os.remove(path)
+            except OSError: pass
+            errors.append(f"Slot {i}: unsupported file type ({ext})")
+            continue
+
+        post = Post(
+            client_id=client.id,
+            brief=brief or None,
+            media_type=media_type,
+            original_filename=name,
+            status="pending_processing",
+            vibe_prompt=vibe_prompt or None,
+        )
+        db.session.add(post)
+        db.session.flush()   # get post.id without full commit
+
+        thread = threading.Thread(
+            target=process_post_async,
+            args=(app.app_context(), post.id,
+                  None, vibe_prompt, add_overlay, 0, "cut"),
+            daemon=True,
+        )
+        thread.start()
+        launched += 1
+
+    db.session.commit()
+
+    if errors:
+        for msg in errors:
+            flash(msg, "error")
+    if launched:
+        flash(
+            f"🚀 {launched} post{'s' if launched > 1 else ''} queued — all processing in parallel!",
+            "success",
+        )
+    else:
+        flash("No valid files were submitted.", "error")
+
+    return redirect(url_for("dashboard", token=token))
+
+
+# ── Publer scheduling ─────────────────────────────────────────────────────────
+
+@app.route("/client/<token>/post/<int:post_id>/schedule_publer", methods=["POST"])
+def schedule_publer(token, post_id):
+    client = client_or_404(token)
+    post   = Post.query.filter_by(id=post_id, client_id=client.id).first_or_404()
+
+    if not post.processed_filename:
+        flash("Post is not ready yet.", "error")
+        return redirect(url_for("preview", token=token, post_id=post_id))
+
+    # Validate Publer credentials
+    if not client.publer_api_key or not client.publer_workspace_id or not client.publer_account_id:
+        flash("Please save your Publer API credentials in Preferences first.", "error")
+        return redirect(url_for("preferences", token=token))
+
+    scheduled_at = request.form.get("scheduled_at", "").strip()
+    if not scheduled_at:
+        flash("Please choose a date and time to schedule.", "error")
+        return redirect(url_for("preview", token=token, post_id=post_id))
+
+    media_path = os.path.join(proc.PROCESSED_FOLDER, post.processed_filename)
+
+    try:
+        result = sched.schedule_post(
+            api_key      = client.publer_api_key,
+            workspace_id = client.publer_workspace_id,
+            account_id   = client.publer_account_id,
+            caption      = post.caption or "",
+            media_path   = media_path,
+            scheduled_at = scheduled_at,
+            media_type   = post.media_type,
+        )
+        # Capture Publer's post ID if available
+        publer_id = None
+        try:
+            publer_id = str(result.get("posts", [{}])[0].get("id", ""))
+        except Exception:
+            pass
+
+        post.scheduled_at    = scheduled_at
+        post.publer_post_id  = publer_id or None
+        db.session.commit()
+
+        flash(f"✅ Scheduled with Publer for {scheduled_at[:16].replace('T', ' ')}!", "success")
+    except Exception as e:
+        flash(f"Publer error: {e}", "error")
+
+    return redirect(url_for("preview", token=token, post_id=post_id))
 
 
 # ── AI Image Generation ───────────────────────────────────────────────────────
