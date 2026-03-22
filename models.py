@@ -43,8 +43,9 @@ class Client(db.Model):
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    posts = db.relationship("Post", backref="client", lazy=True, cascade="all, delete-orphan")
-    strategies = db.relationship("Strategy", backref="client", lazy=True, cascade="all, delete-orphan")
+    posts      = db.relationship("Post",     backref="client",   lazy=True, cascade="all, delete-orphan")
+    strategies = db.relationship("Strategy", backref="client",   lazy=True, cascade="all, delete-orphan")
+    campaigns  = db.relationship("Campaign", backref="client",   lazy=True, cascade="all, delete-orphan")
 
     @property
     def is_connected(self):
@@ -57,8 +58,12 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey("clients.id"), nullable=False)
 
-    # Status: pending_processing | ready_for_review | posted | failed
+    # Status: pending_processing | pending_approval | ready_for_review | posted | failed
     status = db.Column(db.String(30), default="pending_processing")
+
+    # Campaign (Drive-synced event posts)
+    campaign_id          = db.Column(db.Integer, db.ForeignKey("campaigns.id"), nullable=True)
+    suggested_schedule_at = db.Column(db.Text, nullable=True)   # ISO datetime string
 
     brief = db.Column(db.Text, nullable=True)
     caption = db.Column(db.Text, nullable=True)
