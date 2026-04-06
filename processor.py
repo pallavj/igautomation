@@ -2,7 +2,13 @@
 import os
 import subprocess
 import uuid
-from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
+
+# Lato font paths (available on Ubuntu)
+_LATO_BLACK  = "/usr/share/fonts/truetype/lato/Lato-Black.ttf"
+_LATO_LIGHT  = "/usr/share/fonts/truetype/lato/Lato-LightItalic.ttf"
+_LATO_BOLD   = "/usr/share/fonts/truetype/lato/Lato-Bold.ttf"
+_FALLBACK_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 _base = os.path.dirname(__file__)
 UPLOAD_FOLDER    = os.environ.get("UPLOAD_FOLDER",    os.path.join(_base, "static", "uploads"))
@@ -445,3 +451,121 @@ def process_video(original_path: str, prefs: dict,
 
     return out_name
 
+
+
+# ── Image text overlay (Pillow) ───────────────────────────────────────────────
+
+def _load_font(path: str, size: int) -> ImageFont.FreeTypeFont:
+    try:
+        return ImageFont.truetype(path, size=size)
+    except Exception:
+        try:
+            return ImageFont.truetype(_FALLBACK_FONT, size=size)
+        except Exception:
+            return ImageFont.load_default()
+
+
+def _wrap_text(text: str, font: ImageFont.FreeTypeFont,
+               max_width: int, draw: ImageDraw.ImageDraw) -> list[str]:
+    """Wrap text to fit within max_width pixels. Returns list of lines."""
+    if not text:
+        return []
+    words = text.split()
+    lines, current = [], ""
+    for word in words:
+        test = (current + " " + word).strip()
+        bbox = draw.textbbox((0, 0), test, font=font)
+        if bbox[2] <= max_width:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+def add_image_text_overlay(image_path: str, title: str, quote: str) -> str:
+    """
+    Composite a clean title + quote overlay onto an image using Pillow.
+    Adds a gradient dark strip in the lower portion of the image.
+
+    - Title: Lato Black, large, white
+    - Quote: Lato Light Italic, smaller, off-white
+
+    Returns the new processed filename (saved to PROCESSED_FOLDER).
+    Original file is not modified.
+    """
+    if not title and not quote:
+        # Nothing to add — just return a copy with a new name
+        img = Image.open(image_path).convert("RGB")
+        out_name = f"overlay_{uuid.uuid4().hex}.jpg"
+        img.save(os.path.join(PROCESSED_FOLDER, out_name), "JPEG", quality=92)
+        return out_name
+
+    img  = Image.open(image_path).convert("RGBA")
+    w, h = img.size
+
+    # ── Gradient overlay strip (bottom 42% of image) ─────────────────────────
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw_ov = ImageDraw.Draw(overlay)
+
+    grad_top = int(h * 0.58)
+    for y in range(grad_top, h):
+        # Alpha ramps from 0 at grad_top to ~200 at bottom
+        t     = (y - grad_top) / (h - grad_top)
+        alpha = int(205 * (t ** 1.4))   # ease-in curve for natural look
+        draw_ov.line([(0, y), (w - 1, y)], fill=(0, 0, 0, alpha))
+
+    img = Image.alpha_composite(img, overlay)
+
+    # ── Text drawing ──────────────────────────────────────────────────────────
+    draw    = ImageDraw.Draw(img)
+    pad_x   = int(w * 0.07)          # left/right padding
+    max_tw  = w - pad_x * 2          # max text width
+
+    # Font sizes scale with image height
+    title_size = int(h * 0.062)      # ~67px on 1080px image
+    quote_size = int(h * 0.030)      # ~32px
+
+    font_title = _load_font(_LATO_BLACK, title_size)
+    font_quote = _load_font(_LATO_LIGHT, quote_size)
+
+    # ── Measure and position ──────────────────────────────────────────────────
+    # Title sits at ~63% down, inside the gradient band
+    title_y = int(h * 0.63)
+
+    def _draw_text_with_shadow(text, x, y, font, color, shadow_alpha=120):
+        """Draw text with a subtle drop shadow for legibility."""
+        off = max(2, int(title_size * 0.03))
+        draw.text((x + off, y + off), text, font=font,
+                  fill=(0, 0, 0, shadow_alpha))
+        draw.text((x, y), text, font=font, fill=color)
+
+    # Draw title (single line — keep it short by design)
+    title_text = title[:50]
+    _draw_text_with_shadow(title_text, pad_x, title_y,
+                           font_title, (255, 255, 255, 255))
+
+    # Measure title height to position quote below
+    bbox_t   = draw.textbbox((0, 0), title_text, font=font_title)
+    title_h  = bbox_t[3] - bbox_t[1]
+    line_gap = int(h * 0.018)
+
+    # Draw quote (max 2 wrapped lines)
+    if quote:
+        quote_y = title_y + title_h + line_gap
+        lines   = _wrap_text(quote, font_quote, max_tw, draw)
+        for line in lines[:2]:
+            _draw_text_with_shadow(line, pad_x, quote_y,
+                                   font_quote, (230, 230, 230, 245),
+                                   shadow_alpha=90)
+            bbox_q  = draw.textbbox((0, 0), line, font=font_quote)
+            quote_y += (bbox_q[3] - bbox_q[1]) + int(h * 0.012)
+
+    # ── Save ──────────────────────────────────────────────────────────────────
+    out_name = f"overlay_{uuid.uuid4().hex}.jpg"
+    out_path = os.path.join(PROCESSED_FOLDER, out_name)
+    img.convert("RGB").save(out_path, "JPEG", quality=92)
+    return out_name

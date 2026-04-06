@@ -470,7 +470,7 @@ def generate_post_async(app_ctx, post_id: int, image_prompt: str, image_style: s
         client = post.client
         prefs = client_prefs(client)
         try:
-            # Step 1: generate image
+            # Step 1: generate image (photorealistic, no text)
             generated_filename = imggen.generate_image(image_prompt, style=image_style)
             post.original_filename = generated_filename
 
@@ -478,8 +478,15 @@ def generate_post_async(app_ctx, post_id: int, image_prompt: str, image_style: s
             orig_path = os.path.join(proc.UPLOAD_FOLDER, generated_filename)
             processed_name = proc.process_image(orig_path, prefs)
 
-            # Step 3: generate caption
-            caption = gen.generate_caption(post.brief or image_prompt, prefs)
+            # Step 3: extract title + quote from brief and burn in with Pillow
+            brief_text = post.brief or image_prompt
+            title, quote = gen.extract_title_quote(brief_text)
+            if title or quote:
+                processed_path = os.path.join(proc.PROCESSED_FOLDER, processed_name)
+                processed_name = proc.add_image_text_overlay(processed_path, title, quote)
+
+            # Step 4: generate caption
+            caption = gen.generate_caption(brief_text, prefs)
 
             post.processed_filename = processed_name
             post.caption = caption

@@ -59,3 +59,49 @@ Output ONLY the caption text. No preamble, no explanation."""
         messages=[{"role": "user", "content": prompt}],
     )
     return message.content[0].text.strip()
+
+
+def extract_title_quote(brief: str) -> tuple[str, str]:
+    """
+    Extract a short post title and a punchy one-line quote from a brief.
+    Used to add clean Pillow-rendered text overlays to generated images.
+
+    Returns (title, quote). Both strings safe to render as image overlay text.
+    Returns ('', '') if brief is empty or extraction fails.
+
+    Title: 2–5 words, impactful, can end with a period.
+    Quote: single line, max 55 chars, a hook or statement from the brief.
+    """
+    if not brief or not brief.strip():
+        return ("", "")
+
+    prompt = f"""You are a social media content designer.
+Given the post brief below, extract TWO pieces of text to overlay on an Instagram image.
+
+Rules:
+- TITLE: 2–5 words. Bold and impactful. Can end with a period. No quotation marks.
+- QUOTE: One single line, max 55 characters. A punchy statement or hook from the brief. No hashtags.
+
+Output EXACTLY in this format with no other text:
+TITLE: <title here>
+QUOTE: <quote here>
+
+Brief:
+{brief[:600]}"""
+
+    try:
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=80,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = msg.content[0].text.strip()
+        title, quote = "", ""
+        for line in text.splitlines():
+            if line.startswith("TITLE:"):
+                title = line.replace("TITLE:", "").strip().strip('"\'')
+            elif line.startswith("QUOTE:"):
+                quote = line.replace("QUOTE:", "").strip().strip('"\'')
+        return (title[:60], quote[:60])
+    except Exception:
+        return ("", "")
